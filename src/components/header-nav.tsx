@@ -1,68 +1,132 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
-type NavItem = {
+import { disciplineBranches, getDisciplineProfile } from "@/lib/disciplines";
+
+type UtilityItem = {
   href: string;
   label: string;
-  hint: string;
-  badge: string;
 };
 
-const learnItems: NavItem[] = [
-  { href: "/", label: "홈", hint: "시작 노트", badge: "HM" },
-  { href: "/topic/black-hole", label: "주제", hint: "깊이 읽기", badge: "TP" },
-  { href: "/guide", label: "가이드", hint: "탐색 설계", badge: "GD" },
-];
-
-const archiveItems: NavItem[] = [
-  { href: "/path/black-hole", label: "여정", hint: "학습 경로", badge: "PT" },
-  { href: "/library", label: "서고", hint: "보관된 노트", badge: "LB" },
-  { href: "/workspace", label: "작업실", hint: "연결과 기록", badge: "WS" },
+const utilityItems: UtilityItem[] = [
+  { href: "/", label: "Canvas" },
+  { href: "/guide", label: "Guide" },
+  { href: "/library", label: "Library" },
+  { href: "/workspace", label: "Workspace" },
 ];
 
 function isActivePath(pathname: string, href: string) {
   if (href === "/") {
     return pathname === href;
   }
+
   return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const active = isActivePath(pathname, item.href);
-
-  return (
-    <Link
-      href={item.href}
-      className={`nav-item ${active ? "active" : ""}`}
-      aria-current={active ? "page" : undefined}
-    >
-      <span className="nav-item__badge">{item.badge}</span>
-      <span className="nav-item__meta">
-        <span className="nav-item__label">{item.label}</span>
-        <small className="nav-item__hint">{item.hint}</small>
-      </span>
-    </Link>
-  );
 }
 
 export function HeaderNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const selectedDiscipline = pathname === "/" ? searchParams.get("discipline") : null;
+  const selectedStage = pathname === "/" ? searchParams.get("stage") : null;
+  const selectedTopic = pathname === "/" ? searchParams.get("topic") : null;
+  const mathProfile = getDisciplineProfile("수학");
+  const activeMathStage = selectedDiscipline === "수학" ? (selectedStage ?? mathProfile.stages?.[0]?.level ?? null) : null;
 
   return (
-    <nav className="main-nav" aria-label="Primary Navigation">
-      <div className="nav-cluster">
-        <span className="nav-group__label">학습</span>
-        {learnItems.map((item) => (
-          <NavLink key={item.href} item={item} pathname={pathname} />
-        ))}
+    <nav className="explorer-shell" aria-label="Discipline Explorer">
+      <div className="explorer-topbar">
+        {utilityItems.map((item) => {
+          const active = isActivePath(pathname, item.href);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`explorer-tool ${active ? "active" : ""}`}
+              aria-current={active ? "page" : undefined}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </div>
-      <div className="nav-cluster">
-        <span className="nav-group__label">축적</span>
-        {archiveItems.map((item) => (
-          <NavLink key={item.href} item={item} pathname={pathname} />
-        ))}
+
+      <div className="explorer-section">
+        <div className="explorer-section__meta">
+          <span className="explorer-section__eyebrow">탐색기</span>
+          <strong className="explorer-section__workspace">STUDY</strong>
+        </div>
+
+        <div className="explorer-root">학문</div>
+
+        <div className="explorer-tree">
+          {disciplineBranches.map((branch) => (
+            <details key={branch.id} className="explorer-branch" open>
+              <summary className="explorer-branch__summary">{branch.label}</summary>
+              <div className="explorer-branch__children">
+                {branch.disciplines.map((discipline) => {
+                  if (discipline !== "수학") {
+                    return (
+                      <Link
+                        key={discipline}
+                        href={`/?discipline=${encodeURIComponent(discipline)}`}
+                        className={`explorer-leaf ${selectedDiscipline === discipline ? "active" : ""}`}
+                      >
+                        {discipline}
+                      </Link>
+                    );
+                  }
+
+                  return (
+                    <div key={discipline} className="explorer-node-group">
+                      <Link
+                        href={`/?discipline=${encodeURIComponent(discipline)}`}
+                        className={`explorer-leaf ${selectedDiscipline === discipline ? "active" : ""}`}
+                      >
+                        {discipline}
+                      </Link>
+
+                      {selectedDiscipline === "수학" ? (
+                        <div className="explorer-subtree">
+                          {(mathProfile.stages ?? []).map((stage) => (
+                            <div key={stage.level} className="explorer-stage">
+                              <Link
+                                href={`/?discipline=${encodeURIComponent(discipline)}&stage=${encodeURIComponent(stage.level)}`}
+                                className={`explorer-stage__link ${activeMathStage === stage.level ? "active" : ""}`}
+                              >
+                                {stage.level}
+                              </Link>
+
+                              {activeMathStage === stage.level ? (
+                                <div className="explorer-topic-list">
+                                  {stage.topics.length ? (
+                                    stage.topics.map((topic) => (
+                                      <Link
+                                        key={topic}
+                                        href={`/?discipline=${encodeURIComponent(discipline)}&stage=${encodeURIComponent(stage.level)}&topic=${encodeURIComponent(topic)}`}
+                                        className={`explorer-leaf explorer-leaf--topic ${selectedTopic === topic ? "active" : ""}`}
+                                      >
+                                        {topic}
+                                      </Link>
+                                    ))
+                                  ) : (
+                                    <span className="explorer-note">세부 주제 설계 예정</span>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          ))}
+        </div>
       </div>
     </nav>
   );
