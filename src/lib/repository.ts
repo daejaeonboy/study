@@ -3,7 +3,6 @@ import {
   featuredTopicSlugs,
   guidePresets,
   samplePaths,
-  topics,
   workspaces,
 } from "@/lib/data/seed";
 import type {
@@ -11,14 +10,14 @@ import type {
   GuideRecommendation,
   LearningPath,
   Topic,
+  TopicBundle,
+  VerificationStatus,
   Workspace,
 } from "@/lib/domain";
+import { materializeTopic, topicBundles } from "@/content/topic-bundles";
 import { resolveGuideRecommendation } from "@/lib/guide";
 import { createSupabaseClient, hasSupabaseConfig } from "@/lib/supabase/client";
-
-function topicMap() {
-  return new Map(topics.map((topic) => [topic.slug, topic]));
-}
+import { createSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/supabase/server";
 
 type SupabaseTopicRow = {
   slug?: string | null;
@@ -27,6 +26,23 @@ type SupabaseTopicRow = {
   importance_reason?: string | null;
   category?: string | null;
   tags?: unknown;
+  verification_status?: VerificationStatus | null;
+  source_origin?: string | null;
+  revision?: number | null;
+  imported_at?: string | null;
+  last_reviewed_at?: string | null;
+  editorial_summary?: string | null;
+};
+
+type SupabaseBundleRevisionRow = {
+  topic_slug?: string | null;
+  revision?: number | null;
+  verification_status?: VerificationStatus | null;
+  source_origin?: string | null;
+  editorial_summary?: string | null;
+  bundle_payload?: unknown;
+  imported_at?: string | null;
+  last_reviewed_at?: string | null;
 };
 
 function normalizeTopicTags(tags: unknown): string[] {
@@ -37,51 +53,164 @@ function normalizeTopicTags(tags: unknown): string[] {
   return [];
 }
 
-function mergeRemoteTopics(remoteTopics: SupabaseTopicRow[]): Topic[] {
-  const bySlug = new Map(
-    remoteTopics
-      .filter((topic): topic is Required<Pick<SupabaseTopicRow, "slug">> & SupabaseTopicRow =>
-        typeof topic.slug === "string" && topic.slug.length > 0,
-      )
-      .map((topic) => [topic.slug, topic]),
-  );
+function getSupabaseReadClient() {
+  if (hasSupabaseAdminConfig()) {
+    return createSupabaseAdminClient();
+  }
 
-  return topics.map((topic) => {
-    const remote = bySlug.get(topic.slug);
+  if (hasSupabaseConfig()) {
+    return createSupabaseClient();
+  }
 
-    if (!remote) {
-      return topic;
+  return null;
+}
+
+function normalizeTopicBundle(payload: unknown): TopicBundle | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<TopicBundle>;
+
+  if (
+    !candidate.topic ||
+    typeof candidate.topic !== "object" ||
+    !candidate.review ||
+    typeof candidate.review !== "object"
+  ) {
+    return null;
+  }
+
+  const maybeSlug = (candidate.topic as { slug?: unknown }).slug;
+
+  if (typeof maybeSlug !== "string" || maybeSlug.length === 0) {
+    return null;
+  }
+
+  return candidate as TopicBundle;
+}
+
+function mergeTopicRowIntoBundle(bundle: TopicBundle, remote: SupabaseTopicRow): TopicBundle {
+  const normalizedTags = normalizeTopicTags(remote.tags);
+
+  return {
+    topic: {
+      ...bundle.topic,
+      title: remote.title?.trim() || bundle.topic.title,
+      summary: remote.summary?.trim() || bundle.topic.summary,
+      importance: remote.importance_reason?.trim() || bundle.topic.importance,
+      category: remote.category?.trim() || bundle.topic.category,
+      tags: normalizedTags.length ? normalizedTags : bundle.topic.tags,
+    },
+    review: {
+      ...bundle.review,
+      verificationStatus: remote.verification_status ?? bundle.review.verificationStatus,
+      sourceOrigin: remote.source_origin?.trim() || bundle.review.sourceOrigin,
+      revision: remote.revision ?? bundle.review.revision,
+      importedAt: remote.imported_at ?? bundle.review.importedAt,
+      lastReviewedAt: remote.last_reviewed_at ?? bundle.review.lastReviewedAt,
+      editorialSummary: remote.editorial_summary?.trim() || bundle.review.editorialSummary,
+    },
+  };
+}
+
+function mergeRevisionRowIntoBundle(
+  bundle: TopicBundle,
+  revisionRow: SupabaseBundleRevisionRow,
+): TopicBundle {
+  return {
+    ...bundle,
+    review: {
+      ...bundle.review,
+      verificationStatus: revisionRow.verification_status ?? bundle.review.verificationStatus,
+      sourceOrigin: revisionRow.source_origin?.trim() || bundle.review.sourceOrigin,
+      revision: revisionRow.revision ?? bundle.review.revision,
+      importedAt: revisionRow.imported_at ?? bundle.review.importedAt,
+      lastReviewedAt: revisionRow.last_reviewed_at ?? bundle.review.lastReviewedAt,
+      editorialSummary: revisionRow.editorial_summary?.trim() || bundle.review.editorialSummary,
+    },
+  };
+}
+
+function mergeRemoteBundles(
+  remoteTopics: SupabaseTopicRow[],
+  remoteBundleRows: SupabaseBundleRevisionRow[],
+): TopicBundle[] {
+  const bundleMap = new Map(topicBundles.map((bundle) => [bundle.topic.slug, bundle]));
+  const latestBundleRows = new Map<string, SupabaseBundleRevisionRow>();
+
+  remoteBundleRows.forEach((row) => {
+    if (typeof row.topic_slug !== "string" || latestBundleRows.has(row.topic_slug)) {
+      return;
     }
 
-    return {
-      ...topic,
-      title: remote.title?.trim() || topic.title,
-      summary: remote.summary?.trim() || topic.summary,
-      importance: remote.importance_reason?.trim() || topic.importance,
-      category: remote.category?.trim() || topic.category,
-      tags: normalizeTopicTags(remote.tags).length ? normalizeTopicTags(remote.tags) : topic.tags,
-    };
+    latestBundleRows.set(row.topic_slug, row);
   });
+
+  latestBundleRows.forEach((row, slug) => {
+    const parsedBundle = normalizeTopicBundle(row.bundle_payload);
+
+    if (!parsedBundle) {
+      return;
+    }
+
+    bundleMap.set(slug, mergeRevisionRowIntoBundle(parsedBundle, row));
+  });
+
+  remoteTopics.forEach((row) => {
+    if (typeof row.slug !== "string") {
+      return;
+    }
+
+    const existing = bundleMap.get(row.slug);
+
+    if (!existing) {
+      return;
+    }
+
+    bundleMap.set(row.slug, mergeTopicRowIntoBundle(existing, row));
+  });
+
+  return Array.from(bundleMap.values());
+}
+
+export async function getTopicBundles(): Promise<TopicBundle[]> {
+  const supabase = getSupabaseReadClient();
+
+  if (!supabase) {
+    return topicBundles;
+  }
+
+  const [{ data: topicRows, error: topicError }, { data: revisionRows, error: revisionError }] =
+    await Promise.all([
+      supabase
+        .from("topics")
+        .select(
+          "slug, title, summary, importance_reason, category, tags, verification_status, source_origin, revision, imported_at, last_reviewed_at, editorial_summary",
+        )
+        .order("title", { ascending: true }),
+      supabase
+        .from("topic_bundle_revisions")
+        .select(
+          "topic_slug, revision, verification_status, source_origin, editorial_summary, bundle_payload, imported_at, last_reviewed_at",
+        )
+        .order("topic_slug", { ascending: true })
+        .order("revision", { ascending: false }),
+    ]);
+
+  if (topicError && revisionError) {
+    return topicBundles;
+  }
+
+  return mergeRemoteBundles(
+    (topicRows as SupabaseTopicRow[] | null) ?? [],
+    (revisionRows as SupabaseBundleRevisionRow[] | null) ?? [],
+  );
 }
 
 export async function getTopics(): Promise<Topic[]> {
-  if (hasSupabaseConfig()) {
-    const supabase = createSupabaseClient();
-    if (!supabase) {
-      return topics;
-    }
-
-    const { data, error } = await supabase
-      .from("topics")
-      .select("slug, title, summary, importance_reason, category, tags")
-      .order("title", { ascending: true });
-
-    if (!error && data?.length) {
-      return mergeRemoteTopics(data as SupabaseTopicRow[]);
-    }
-  }
-
-  return topics;
+  const bundles = await getTopicBundles();
+  return bundles.map(materializeTopic);
 }
 
 export async function getTopicBySlug(slug: string): Promise<Topic | null> {
@@ -101,12 +230,13 @@ export async function getCategories(): Promise<string[]> {
 }
 
 export async function getLearningPath(slug: string): Promise<LearningPath> {
+  const allTopics = await getTopics();
+  const map = new Map(allTopics.map((topic) => [topic.slug, topic]));
   const match = samplePaths.find((path) => path.slug === slug);
   if (match) {
     return match;
   }
 
-  const map = topicMap();
   const topic = map.get(slug);
 
   if (!topic) {

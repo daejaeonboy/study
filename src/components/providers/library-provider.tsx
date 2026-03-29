@@ -1,8 +1,23 @@
 "use client";
 
-import { createContext, startTransition, useContext, useSyncExternalStore, type ReactNode } from "react";
+import {
+  createContext,
+  startTransition,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
+import { useAppUser } from "@/components/providers/app-user-provider";
 import type { LayerDepth } from "@/lib/domain";
+import {
+  defaultGuestLibrarySnapshot,
+  type LibraryMutation,
+  type LibrarySnapshot,
+} from "@/lib/library-state";
 
 const STORAGE_KEYS = {
   saved: "ikl.savedTopicSlugs",
@@ -11,24 +26,6 @@ const STORAGE_KEYS = {
   layers: "ikl.topicLayers",
 };
 
-const defaultSnapshot = {
-  savedSlugs: ["black-hole", "philosophy-of-science"],
-  recentSlugs: ["black-hole", "scientific-revolution", "french-revolution"],
-  notes: {
-    "black-hole":
-      "블랙홀은 단독 설명보다 중력 -> 시공간 -> 일반상대성이론 순서가 더 자연스럽다.",
-    "french-revolution":
-      "사건 연표만 보여주지 말고 민주주의로 넘어가는 다리를 같이 보여줘야 한다.",
-  } as Record<string, string>,
-  layerProgress: {
-    "black-hole": "core",
-    "scientific-revolution": "light",
-    "french-revolution": "light",
-  } as Record<string, LayerDepth>,
-};
-
-type LibrarySnapshot = typeof defaultSnapshot;
-
 type LibraryContextValue = {
   savedSlugs: string[];
   recentSlugs: string[];
@@ -36,14 +33,14 @@ type LibraryContextValue = {
   layerProgress: Record<string, LayerDepth>;
   toggleSave: (topicSlug: string) => void;
   markRecent: (topicSlug: string) => void;
-  setNote: (topicSlug: string, value: string) => void;
+  setNote: (topicSlug: string, value: string, depth?: LayerDepth) => void;
   setLayerProgress: (topicSlug: string, depth: LayerDepth) => void;
 };
 
 const listeners = new Set<() => void>();
 const LibraryContext = createContext<LibraryContextValue | null>(null);
-let memorySnapshot: LibrarySnapshot = defaultSnapshot;
-let storageCache = {
+let guestMemorySnapshot: LibrarySnapshot = defaultGuestLibrarySnapshot;
+let guestStorageCache = {
   saved: null as string | null,
   recent: null as string | null,
   notes: null as string | null,
@@ -58,9 +55,9 @@ function parseJson<T>(raw: string | null, fallback: T) {
   }
 }
 
-function getSnapshot(): LibrarySnapshot {
+function readGuestSnapshot(): LibrarySnapshot {
   if (typeof window === "undefined") {
-    return memorySnapshot;
+    return guestMemorySnapshot;
   }
 
   try {
@@ -72,37 +69,33 @@ function getSnapshot(): LibrarySnapshot {
     };
 
     if (
-      nextCache.saved === storageCache.saved &&
-      nextCache.recent === storageCache.recent &&
-      nextCache.notes === storageCache.notes &&
-      nextCache.layers === storageCache.layers
+      nextCache.saved === guestStorageCache.saved &&
+      nextCache.recent === guestStorageCache.recent &&
+      nextCache.notes === guestStorageCache.notes &&
+      nextCache.layers === guestStorageCache.layers
     ) {
-      return memorySnapshot;
+      return guestMemorySnapshot;
     }
 
-    storageCache = nextCache;
-    memorySnapshot = {
-      savedSlugs: parseJson(nextCache.saved, defaultSnapshot.savedSlugs),
-      recentSlugs: parseJson(nextCache.recent, defaultSnapshot.recentSlugs),
-      notes: parseJson(nextCache.notes, defaultSnapshot.notes),
-      layerProgress: parseJson(nextCache.layers, defaultSnapshot.layerProgress),
+    guestStorageCache = nextCache;
+    guestMemorySnapshot = {
+      savedSlugs: parseJson(nextCache.saved, defaultGuestLibrarySnapshot.savedSlugs),
+      recentSlugs: parseJson(nextCache.recent, defaultGuestLibrarySnapshot.recentSlugs),
+      notes: parseJson(nextCache.notes, defaultGuestLibrarySnapshot.notes),
+      layerProgress: parseJson(nextCache.layers, defaultGuestLibrarySnapshot.layerProgress),
     };
   } catch {
-    return memorySnapshot;
+    return guestMemorySnapshot;
   }
 
-  return memorySnapshot;
+  return guestMemorySnapshot;
 }
 
-function getServerSnapshot(): LibrarySnapshot {
-  return memorySnapshot;
+function getGuestServerSnapshot() {
+  return guestMemorySnapshot;
 }
 
-function emitChange() {
-  listeners.forEach((listener) => listener());
-}
-
-function subscribe(listener: () => void) {
+function subscribeGuestSnapshot(listener: () => void) {
   listeners.add(listener);
 
   function handleStorage() {
@@ -117,14 +110,18 @@ function subscribe(listener: () => void) {
   };
 }
 
-function writeSnapshot(snapshot: LibrarySnapshot) {
+function emitGuestSnapshotChange() {
+  listeners.forEach((listener) => listener());
+}
+
+function writeGuestSnapshot(snapshot: LibrarySnapshot) {
   const saved = JSON.stringify(snapshot.savedSlugs);
   const recent = JSON.stringify(snapshot.recentSlugs);
   const notes = JSON.stringify(snapshot.notes);
   const layers = JSON.stringify(snapshot.layerProgress);
 
-  memorySnapshot = snapshot;
-  storageCache = {
+  guestMemorySnapshot = snapshot;
+  guestStorageCache = {
     saved,
     recent,
     notes,
@@ -137,14 +134,216 @@ function writeSnapshot(snapshot: LibrarySnapshot) {
     window.localStorage.setItem(STORAGE_KEYS.notes, notes);
     window.localStorage.setItem(STORAGE_KEYS.layers, layers);
   } catch {
-    // Storage may be blocked by browser policy or stale extension state; keep the in-memory snapshot alive.
+    // Ignore browser storage write failures and keep the in-memory guest snapshot.
   }
 
-  emitChange();
+  emitGuestSnapshotChange();
 }
 
-export function LibraryProvider({ children }: { children: ReactNode }) {
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+function applyMutation(snapshot: LibrarySnapshot, mutation: LibraryMutation): LibrarySnapshot {
+  switch (mutation.type) {
+    case "toggle-save":
+      return {
+        ...snapshot,
+        savedSlugs: snapshot.savedSlugs.includes(mutation.topicSlug)
+          ? snapshot.savedSlugs.filter((slug) => slug !== mutation.topicSlug)
+          : [mutation.topicSlug, ...snapshot.savedSlugs],
+      };
+    case "mark-recent":
+      return {
+        ...snapshot,
+        recentSlugs: [
+          mutation.topicSlug,
+          ...snapshot.recentSlugs.filter((slug) => slug !== mutation.topicSlug),
+        ].slice(0, 6),
+      };
+    case "set-note": {
+      const nextNotes = { ...snapshot.notes };
+
+      if (mutation.value.length) {
+        nextNotes[mutation.topicSlug] = mutation.value;
+      } else {
+        delete nextNotes[mutation.topicSlug];
+      }
+
+      return {
+        ...snapshot,
+        notes: nextNotes,
+      };
+    }
+    case "set-layer-progress":
+      return {
+        ...snapshot,
+        layerProgress: {
+          ...snapshot.layerProgress,
+          [mutation.topicSlug]: mutation.depth,
+        },
+        recentSlugs: [
+          mutation.topicSlug,
+          ...snapshot.recentSlugs.filter((slug) => slug !== mutation.topicSlug),
+        ].slice(0, 6),
+      };
+    default:
+      return snapshot;
+  }
+}
+
+function mergeServerSnapshot(
+  current: LibrarySnapshot,
+  next: LibrarySnapshot,
+  dirtyNoteSlugs: Set<string>,
+) {
+  if (!dirtyNoteSlugs.size) {
+    return next;
+  }
+
+  const mergedNotes = { ...next.notes };
+
+  dirtyNoteSlugs.forEach((topicSlug) => {
+    if (topicSlug in current.notes) {
+      mergedNotes[topicSlug] = current.notes[topicSlug];
+      return;
+    }
+
+    delete mergedNotes[topicSlug];
+  });
+
+  return {
+    ...next,
+    notes: mergedNotes,
+  };
+}
+
+async function postLibraryMutation(mutation: LibraryMutation) {
+  const response = await fetch("/api/library", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(mutation),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to sync library state.");
+  }
+
+  return (await response.json()) as LibrarySnapshot;
+}
+
+export function LibraryProvider({
+  children,
+  initialSnapshot,
+}: {
+  children: ReactNode;
+  initialSnapshot: LibrarySnapshot;
+}) {
+  const appUser = useAppUser();
+  const guestSnapshot = useSyncExternalStore(
+    subscribeGuestSnapshot,
+    readGuestSnapshot,
+    getGuestServerSnapshot,
+  );
+  const [remoteSnapshot, setRemoteSnapshot] = useState(initialSnapshot);
+  const latestSyncIdRef = useRef(0);
+  const dirtyNoteSlugsRef = useRef(new Set<string>());
+  const noteSyncTimersRef = useRef(new Map<string, number>());
+  const snapshot = appUser ? remoteSnapshot : guestSnapshot;
+
+  function clearNoteSyncTimers() {
+    noteSyncTimersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    noteSyncTimersRef.current.clear();
+  }
+
+  useEffect(() => {
+    return () => {
+      clearNoteSyncTimers();
+    };
+  }, []);
+
+  function syncMutation(mutation: LibraryMutation) {
+    if (!appUser) {
+      return;
+    }
+
+    const syncId = ++latestSyncIdRef.current;
+
+    void postLibraryMutation(mutation)
+      .then((nextSnapshot) => {
+        if (syncId !== latestSyncIdRef.current) {
+          return;
+        }
+
+        setRemoteSnapshot((current) =>
+          mergeServerSnapshot(current, nextSnapshot, dirtyNoteSlugsRef.current),
+        );
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }
+
+  function scheduleNoteSync(mutation: Extract<LibraryMutation, { type: "set-note" }>) {
+    if (!appUser) {
+      return;
+    }
+
+    dirtyNoteSlugsRef.current.add(mutation.topicSlug);
+
+    const existingTimer = noteSyncTimersRef.current.get(mutation.topicSlug);
+
+    if (typeof existingTimer === "number") {
+      window.clearTimeout(existingTimer);
+    }
+
+    const timerId = window.setTimeout(() => {
+      noteSyncTimersRef.current.delete(mutation.topicSlug);
+
+      const syncId = ++latestSyncIdRef.current;
+
+      void postLibraryMutation(mutation)
+        .then((nextSnapshot) => {
+          dirtyNoteSlugsRef.current.delete(mutation.topicSlug);
+
+          if (syncId !== latestSyncIdRef.current) {
+            return;
+          }
+
+          setRemoteSnapshot((current) =>
+            mergeServerSnapshot(current, nextSnapshot, dirtyNoteSlugsRef.current),
+          );
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    }, 450);
+
+    noteSyncTimersRef.current.set(mutation.topicSlug, timerId);
+  }
+
+  function commitGuestMutation(mutation: LibraryMutation) {
+    const nextSnapshot = applyMutation(readGuestSnapshot(), mutation);
+    writeGuestSnapshot(nextSnapshot);
+  }
+
+  function commitMutation(mutation: LibraryMutation) {
+    if (!appUser) {
+      commitGuestMutation(mutation);
+      return;
+    }
+
+    startTransition(() => {
+      setRemoteSnapshot((current) => applyMutation(current, mutation));
+    });
+
+    if (mutation.type === "set-note") {
+      scheduleNoteSync(mutation);
+      return;
+    }
+
+    syncMutation(mutation);
+  }
 
   const value: LibraryContextValue = {
     savedSlugs: snapshot.savedSlugs,
@@ -152,30 +351,23 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     notes: snapshot.notes,
     layerProgress: snapshot.layerProgress,
     toggleSave(topicSlug) {
-      startTransition(() => {
-        writeSnapshot({
-          ...snapshot,
-          savedSlugs: snapshot.savedSlugs.includes(topicSlug)
-            ? snapshot.savedSlugs.filter((slug) => slug !== topicSlug)
-            : [topicSlug, ...snapshot.savedSlugs],
-        });
+      commitMutation({
+        type: "toggle-save",
+        topicSlug,
       });
     },
     markRecent(topicSlug) {
-      startTransition(() => {
-        writeSnapshot({
-          ...snapshot,
-          recentSlugs: [topicSlug, ...snapshot.recentSlugs.filter((slug) => slug !== topicSlug)].slice(0, 6),
-        });
+      commitMutation({
+        type: "mark-recent",
+        topicSlug,
       });
     },
-    setNote(topicSlug, value) {
-      writeSnapshot({
-        ...snapshot,
-        notes: {
-          ...snapshot.notes,
-          [topicSlug]: value,
-        },
+    setNote(topicSlug, value, depth) {
+      commitMutation({
+        type: "set-note",
+        topicSlug,
+        value,
+        depth,
       });
     },
     setLayerProgress(topicSlug, depth) {
@@ -183,14 +375,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      startTransition(() => {
-        writeSnapshot({
-          ...snapshot,
-          layerProgress: {
-            ...snapshot.layerProgress,
-            [topicSlug]: depth,
-          },
-        });
+      commitMutation({
+        type: "set-layer-progress",
+        topicSlug,
+        depth,
       });
     },
   };

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -12,12 +13,14 @@ import {
   findBranchByDiscipline,
   getDisciplineProfile,
 } from "@/lib/disciplines";
+import type { GraphSelection } from "@/lib/graph-documents";
 
 const GRAPH_WIDTH = 4000;
 const GRAPH_HEIGHT = 2600;
-const MIN_SCALE = 0.45;
-const MAX_SCALE = 2.4;
+const MIN_SCALE = 0.28;
+const MAX_SCALE = 3.4;
 const ZOOM_SENSITIVITY = 0.0014;
+const ZOOM_STEP = 1.18;
 const ROOT_NODE = {
   label: "학문",
   x: GRAPH_WIDTH / 2,
@@ -28,11 +31,9 @@ type KnowledgeGraphCanvasProps = {
   selectedDiscipline: string;
   selectedStage: string | null;
   selectedTopic: string | null;
-  onSelectNode: (selection: {
-    discipline: string;
-    stage?: string | null;
-    topic?: string | null;
-  }) => void;
+  isCurriculumExpanded: boolean;
+  onSelectNode: (selection: GraphSelection) => void;
+  onReadNode: (selection: GraphSelection) => void;
 };
 
 type DisciplineNode = {
@@ -75,6 +76,8 @@ type GraphLink = {
   tone: "primary" | "secondary" | "ghost";
 };
 
+type GraphModel = ReturnType<typeof buildGraph>;
+
 function hashValue(input: string) {
   let hash = 0;
 
@@ -101,37 +104,42 @@ function buildDisciplinePoint(
   };
 }
 
-function resolveMathStage(selectedStage: string | null, selectedTopic: string | null) {
-  const mathStages = getDisciplineProfile("수학").stages ?? [];
+function resolveCurriculumStage(
+  discipline: string,
+  selectedStage: string | null,
+  selectedTopic: string | null,
+) {
+  const stages = getDisciplineProfile(discipline).stages ?? [];
 
-  if (!mathStages.length) {
+  if (!stages.length) {
     return null;
   }
 
   if (selectedStage) {
-    return mathStages.find((stage) => stage.level === selectedStage) ?? mathStages[0];
+    return stages.find((stage) => stage.level === selectedStage) ?? stages[0];
   }
 
   if (selectedTopic) {
-    return mathStages.find((stage) => stage.topics.includes(selectedTopic)) ?? mathStages[0];
+    return stages.find((stage) => stage.topics.includes(selectedTopic)) ?? stages[0];
   }
 
-  return mathStages[0];
+  return null;
 }
 
 function buildMathCurriculum(
   mathNode: DisciplineNode,
+  discipline: string,
   activeStageLevel: string | null,
   selectedTopic: string | null,
 ) {
-  const mathStages = getDisciplineProfile("수학").stages ?? [];
+  const stages = getDisciplineProfile(discipline).stages ?? [];
   const stageStartX = mathNode.x + 250;
   const stageStartY = mathNode.y - 330;
   const stageGapY = 215;
   const topicOffsetX = 250;
   const topicGapY = 38;
 
-  const stageNodes: MathStageNode[] = mathStages.map((stage, index) => ({
+  const stageNodes: MathStageNode[] = stages.map((stage, index) => ({
     level: stage.level,
     title: stage.title,
     x: stageStartX + (index % 2) * 36,
@@ -139,8 +147,9 @@ function buildMathCurriculum(
     active: activeStageLevel === stage.level,
   }));
 
-  const topicNodes: MathTopicNode[] = mathStages.flatMap((stage, stageIndex) => {
-    const stageNode = stageNodes[stageIndex];
+  const visibleStages = activeStageLevel ? stages.filter((stage) => stage.level === activeStageLevel) : [];
+  const topicNodes: MathTopicNode[] = visibleStages.flatMap((stage) => {
+    const stageNode = stageNodes.find((node) => node.level === stage.level)!;
     const stackStartY = stageNode.y - ((stage.topics.length - 1) * topicGapY) / 2;
 
     return stage.topics.map((topic, topicIndex) => ({
@@ -149,7 +158,7 @@ function buildMathCurriculum(
       x: stageNode.x + topicOffsetX,
       y: stackStartY + topicIndex * topicGapY,
       active: selectedTopic === topic,
-      muted: activeStageLevel ? stage.level !== activeStageLevel : false,
+      muted: false,
     }));
   });
 
@@ -191,7 +200,12 @@ function buildMathCurriculum(
   };
 }
 
-function buildGraph(selectedDiscipline: string, selectedStage: string | null, selectedTopic: string | null) {
+function buildGraph(
+  selectedDiscipline: string,
+  selectedStage: string | null,
+  selectedTopic: string | null,
+  isCurriculumExpanded: boolean,
+) {
   const selectedBranch = findBranchByDiscipline(selectedDiscipline);
   const branchNodes: BranchNode[] = disciplineBranches.map((branch) => ({
     id: branch.id,
@@ -246,48 +260,114 @@ function buildGraph(selectedDiscipline: string, selectedStage: string | null, se
     ),
   ];
 
-  const activeMathStage =
-    selectedDiscipline === "수학" ? resolveMathStage(selectedStage, selectedTopic) : null;
-  const mathNode =
-    selectedDiscipline === "수학"
-      ? disciplineNodes.find((node) => node.label === "수학") ?? null
+  const activeCurriculumStage =
+    isCurriculumExpanded
+      ? resolveCurriculumStage(selectedDiscipline, selectedStage, selectedTopic)
       : null;
-  const mathCurriculum = mathNode
-    ? buildMathCurriculum(mathNode, activeMathStage?.level ?? null, selectedTopic)
+  const curriculumNode =
+    isCurriculumExpanded
+      ? disciplineNodes.find((node) => node.label === selectedDiscipline) ?? null
+      : null;
+  const curriculum = curriculumNode
+    ? buildMathCurriculum(
+        curriculumNode,
+        selectedDiscipline,
+        activeCurriculumStage?.level ?? null,
+        selectedTopic,
+      )
     : { stageNodes: [], topicNodes: [], links: [] };
 
   return {
     branchNodes,
     disciplineNodes,
-    stageNodes: mathCurriculum.stageNodes,
-    topicNodes: mathCurriculum.topicNodes,
-    activeMathStage,
-    links: [...links, ...mathCurriculum.links],
+    stageNodes: curriculum.stageNodes,
+    topicNodes: curriculum.topicNodes,
+    activeCurriculumStage,
+    links: [...links, ...curriculum.links],
   };
 }
 
-function getFocusOffset(selectedDiscipline: string, scale: number) {
-  const branch = findBranchByDiscipline(selectedDiscipline);
-  const focusPoint = branch
-    ? { x: branch.x, y: branch.y }
-    : { x: ROOT_NODE.x, y: ROOT_NODE.y };
+function createSelectionKey(
+  selectedDiscipline: string,
+  selectedStage: string | null,
+  selectedTopic: string | null,
+) {
+  if (selectedTopic) {
+    return `topic:${selectedDiscipline}:${selectedStage ?? ""}:${selectedTopic}`;
+  }
 
-  return {
-    x: (ROOT_NODE.x - focusPoint.x) * scale,
-    y: (ROOT_NODE.y - focusPoint.y) * scale,
-  };
+  if (selectedStage) {
+    return `stage:${selectedDiscipline}:${selectedStage}`;
+  }
+
+  return `discipline:${selectedDiscipline}`;
+}
+
+function getFocusPoint(
+  graph: GraphModel,
+  selectedDiscipline: string,
+  selectedStage: string | null,
+  selectedTopic: string | null,
+) {
+  if (selectedTopic) {
+    const activeTopicNode =
+      graph.topicNodes.find(
+        (topic) =>
+          topic.label === selectedTopic &&
+          (!selectedStage || topic.level === selectedStage),
+      ) ?? null;
+
+    if (activeTopicNode) {
+      return { x: activeTopicNode.x, y: activeTopicNode.y };
+    }
+  }
+
+  if (selectedStage) {
+    const activeStageNode =
+      graph.stageNodes.find((stage) => stage.level === selectedStage) ?? null;
+
+    if (activeStageNode) {
+      return { x: activeStageNode.x, y: activeStageNode.y };
+    }
+  }
+
+  const activeDisciplineNode =
+    graph.disciplineNodes.find((discipline) => discipline.label === selectedDiscipline) ?? null;
+
+  if (activeDisciplineNode) {
+    return { x: activeDisciplineNode.x, y: activeDisciplineNode.y };
+  }
+
+  const branch = findBranchByDiscipline(selectedDiscipline);
+  return branch ? { x: branch.x, y: branch.y } : { x: ROOT_NODE.x, y: ROOT_NODE.y };
 }
 
 export function KnowledgeGraphCanvas(props: KnowledgeGraphCanvasProps) {
-  const graph = buildGraph(props.selectedDiscipline, props.selectedStage, props.selectedTopic);
+  const selectionKey = createSelectionKey(
+    props.selectedDiscipline,
+    props.selectedStage,
+    props.selectedTopic,
+  );
+  const graph = buildGraph(
+    props.selectedDiscipline,
+    props.selectedStage,
+    props.selectedTopic,
+    props.isCurriculumExpanded,
+  );
   const stageRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({
     scale: 1,
-    selection: props.selectedDiscipline,
+    selection: selectionKey,
     x: 0,
     y: 0,
   });
   const [isPanning, setIsPanning] = useState(false);
+  const focusPoint = getFocusPoint(
+    graph,
+    props.selectedDiscipline,
+    props.selectedStage,
+    props.selectedTopic,
+  );
   const dragStateRef = useRef({
     pointerId: -1,
     startX: 0,
@@ -295,9 +375,101 @@ export function KnowledgeGraphCanvas(props: KnowledgeGraphCanvasProps) {
     originX: 0,
     originY: 0,
   });
-  const focusOffset = getFocusOffset(props.selectedDiscipline, viewport.scale);
+
+  useEffect(() => {
+    setViewport((current) =>
+      current.selection === selectionKey && current.x === 0 && current.y === 0
+        ? current
+        : {
+            ...current,
+            selection: selectionKey,
+            x: 0,
+            y: 0,
+          },
+    );
+  }, [selectionKey]);
+
   const activePanOffset =
-    viewport.selection === props.selectedDiscipline ? viewport : { x: 0, y: 0 };
+    viewport.selection === selectionKey
+      ? { x: viewport.x, y: viewport.y }
+      : { x: 0, y: 0 };
+  const zoomPercentage = Math.round(viewport.scale * 100);
+  const viewportOffset = {
+    x: activePanOffset.x + (ROOT_NODE.x - focusPoint.x) * viewport.scale,
+    y: activePanOffset.y + (ROOT_NODE.y - focusPoint.y) * viewport.scale,
+  };
+  const activeSelection: GraphSelection = props.selectedTopic
+    ? {
+        kind: "topic",
+        discipline: props.selectedDiscipline,
+        stage:
+          props.selectedStage ??
+          resolveCurriculumStage(
+            props.selectedDiscipline,
+            props.selectedStage,
+            props.selectedTopic,
+          )?.level ??
+          "1단계",
+        topic: props.selectedTopic,
+      }
+    : props.selectedStage
+      ? {
+          kind: "stage",
+          discipline: props.selectedDiscipline,
+          stage: props.selectedStage,
+          topic: null,
+        }
+      : {
+          kind: "discipline",
+          discipline: props.selectedDiscipline,
+          stage: null,
+          topic: null,
+        };
+  const activeSelectionPoint = props.selectedTopic
+    ? graph.topicNodes.find(
+        (topic) =>
+          topic.label === props.selectedTopic &&
+          (!props.selectedStage || topic.level === props.selectedStage),
+      ) ?? null
+    : props.selectedStage
+      ? graph.stageNodes.find((stage) => stage.level === props.selectedStage) ?? null
+      : graph.disciplineNodes.find((discipline) => discipline.label === props.selectedDiscipline) ?? null;
+
+  function zoomTo(nextScale: number, originX = 0, originY = 0) {
+    setViewport((current) => {
+      const currentPan =
+        current.selection === selectionKey
+          ? { x: current.x, y: current.y }
+          : { x: 0, y: 0 };
+      const clampedScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, nextScale));
+
+      if (Math.abs(clampedScale - current.scale) < 0.001) {
+        return current;
+      }
+
+      const ratio = clampedScale / current.scale;
+
+      return {
+        scale: clampedScale,
+        selection: selectionKey,
+        x: originX - (originX - currentPan.x) * ratio,
+        y: originY - (originY - currentPan.y) * ratio,
+      };
+    });
+  }
+
+  function nudgeZoom(direction: "in" | "out") {
+    zoomTo(viewport.scale * (direction === "in" ? ZOOM_STEP : 1 / ZOOM_STEP));
+  }
+
+  function resetView() {
+    setViewport({
+      scale: 1,
+      selection: selectionKey,
+      x: 0,
+      y: 0,
+    });
+  }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) {
@@ -323,7 +495,7 @@ export function KnowledgeGraphCanvas(props: KnowledgeGraphCanvasProps) {
 
     setViewport((current) => ({
       ...current,
-      selection: props.selectedDiscipline,
+      selection: selectionKey,
       x: dragStateRef.current.originX + (event.clientX - dragStateRef.current.startX),
       y: dragStateRef.current.originY + (event.clientY - dragStateRef.current.startY),
     }));
@@ -356,7 +528,7 @@ export function KnowledgeGraphCanvas(props: KnowledgeGraphCanvasProps) {
 
     setViewport((current) => {
       const currentPan =
-        current.selection === props.selectedDiscipline
+        current.selection === selectionKey
           ? { x: current.x, y: current.y }
           : { x: 0, y: 0 };
       const rawNextScale = current.scale * Math.exp(-event.deltaY * ZOOM_SENSITIVITY);
@@ -370,7 +542,7 @@ export function KnowledgeGraphCanvas(props: KnowledgeGraphCanvasProps) {
 
       return {
         scale: nextScale,
-        selection: props.selectedDiscipline,
+        selection: selectionKey,
         x: pointerX - (pointerX - currentPan.x) * ratio,
         y: pointerY - (pointerY - currentPan.y) * ratio,
       };
@@ -391,124 +563,188 @@ export function KnowledgeGraphCanvas(props: KnowledgeGraphCanvasProps) {
     >
       <p id="knowledge-graph-help" className="sr-only">
         페이지 전체를 사용하는 대형 학문 캔버스입니다. 마우스로 드래그해서 위치를 이동할 수
-        있고, 마우스 휠로 확대하거나 축소할 수 있으며, 학문과 수학 커리큘럼 노드를 눌러
+        있고, 마우스 휠로 확대하거나 축소할 수 있으며, 학문과 커리큘럼 노드를 눌러
         포커스를 바꿀 수 있습니다.
       </p>
+
+      <div
+        className="knowledge-graph__hud"
+        role="group"
+        aria-label="그래프 확대와 축소"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="knowledge-graph__hud-button"
+          onClick={() => nudgeZoom("out")}
+          aria-label="그래프 축소"
+        >
+          -
+        </button>
+        <span className="knowledge-graph__hud-value" aria-live="polite">
+          {zoomPercentage}%
+        </span>
+        <button
+          type="button"
+          className="knowledge-graph__hud-button"
+          onClick={() => nudgeZoom("in")}
+          aria-label="그래프 확대"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          className="knowledge-graph__hud-button is-secondary"
+          onClick={resetView}
+        >
+          기본
+        </button>
+      </div>
 
       <div
         className="graph-world"
         style={{
           width: `${GRAPH_WIDTH}px`,
           height: `${GRAPH_HEIGHT}px`,
-          transform: `translate(-50%, -50%) translate(${focusOffset.x + activePanOffset.x}px, ${focusOffset.y + activePanOffset.y}px) scale(${viewport.scale})`,
+          transform: "translate(-50%, -50%)",
         }}
       >
-        <svg
-          className="knowledge-graph"
-          viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
-          aria-hidden="true"
+        <div
+          className="graph-world__viewport"
+          style={{
+            transformOrigin: `${ROOT_NODE.x}px ${ROOT_NODE.y}px`,
+            transform: `translate(${viewportOffset.x}px, ${viewportOffset.y}px) scale(${viewport.scale})`,
+          }}
         >
-          {graph.links.map((link) => (
-            <line
-              key={link.id}
-              x1={link.from.x}
-              y1={link.from.y}
-              x2={link.to.x}
-              y2={link.to.y}
-              className={`knowledge-link knowledge-link--${link.tone}`}
-            />
-          ))}
-        </svg>
-
-        <div className="graph-node-layer">
-          <div
-            className="graph-node graph-node--root"
-            style={{ left: `${ROOT_NODE.x}px`, top: `${ROOT_NODE.y}px` }}
+          <svg
+            className="knowledge-graph"
+            viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
             aria-hidden="true"
           >
-            <span className="graph-node__core" />
-            <span className="graph-node__label">{ROOT_NODE.label}</span>
-          </div>
+            {graph.links.map((link) => (
+              <line
+                key={link.id}
+                x1={link.from.x}
+                y1={link.from.y}
+                x2={link.to.x}
+                y2={link.to.y}
+                className={`knowledge-link knowledge-link--${link.tone}`}
+              />
+            ))}
+          </svg>
 
-          {graph.branchNodes.map((branch) => (
+          <div className="graph-node-layer">
             <div
-              key={branch.id}
-              className={`graph-node graph-node--branch ${branch.active ? "is-active" : ""}`}
-              style={{ left: `${branch.x}px`, top: `${branch.y}px` }}
+              className="graph-node graph-node--root"
+              style={{ left: `${ROOT_NODE.x}px`, top: `${ROOT_NODE.y}px` }}
               aria-hidden="true"
             >
-              <span className="graph-node__label">{branch.label}</span>
+              <span className="graph-node__core" />
+              <span className="graph-node__label">{ROOT_NODE.label}</span>
             </div>
-          ))}
 
-          {graph.disciplineNodes.map((discipline) => (
-            <button
-              key={discipline.label}
-              type="button"
-              className={`graph-node graph-node--discipline ${discipline.active ? "is-active" : ""} ${discipline.muted ? "is-muted" : ""}`}
-              style={{ left: `${discipline.x}px`, top: `${discipline.y}px` }}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() =>
-                props.onSelectNode({
-                  discipline: discipline.label,
-                  stage: discipline.label === "수학" ? graph.activeMathStage?.level ?? null : null,
-                  topic: null,
-                })
-              }
-              aria-label={`${discipline.label} 노드를 선택하기`}
-              aria-pressed={discipline.active}
-            >
-              <span className="graph-node__core" />
-              <span className="graph-node__label">{discipline.label}</span>
-            </button>
-          ))}
+            {graph.branchNodes.map((branch) => (
+              <div
+                key={branch.id}
+                className={`graph-node graph-node--branch ${branch.active ? "is-active" : ""}`}
+                style={{ left: `${branch.x}px`, top: `${branch.y}px` }}
+                aria-hidden="true"
+              >
+                <span className="graph-node__core" />
+                <span className="graph-node__label">{branch.label}</span>
+              </div>
+            ))}
 
-          {graph.stageNodes.map((stage) => (
-            <button
-              key={stage.level}
-              type="button"
-              className={`graph-node graph-node--stage ${stage.active ? "is-active" : ""}`}
-              style={{ left: `${stage.x}px`, top: `${stage.y}px` }}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() =>
-                props.onSelectNode({
-                  discipline: "수학",
-                  stage: stage.level,
-                  topic: null,
-                })
-              }
-              aria-label={`${stage.level} 노드를 선택하기`}
-              aria-pressed={stage.active}
-            >
-              <span className="graph-node__core" />
-              <span className="graph-node__label">
-                {stage.level}
-                <small className="graph-node__meta">{stage.title}</small>
-              </span>
-            </button>
-          ))}
+            {graph.disciplineNodes.map((discipline) => (
+              <button
+                key={discipline.label}
+                type="button"
+                className={`graph-node graph-node--discipline ${discipline.active ? "is-active" : ""} ${discipline.muted ? "is-muted" : ""}`}
+                style={{ left: `${discipline.x}px`, top: `${discipline.y}px` }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() =>
+                  props.onSelectNode({
+                    kind: "discipline",
+                    discipline: discipline.label,
+                    stage: null,
+                    topic: null,
+                  })
+                }
+                aria-label={`${discipline.label} 노드를 선택하기`}
+                aria-pressed={discipline.active}
+              >
+                <span className="graph-node__core" />
+                <span className="graph-node__label">{discipline.label}</span>
+              </button>
+            ))}
 
-          {graph.topicNodes.map((topic) => (
-            <button
-              key={`${topic.level}:${topic.label}`}
-              type="button"
-              className={`graph-node graph-node--topic ${topic.active ? "is-active" : ""} ${topic.muted ? "is-muted" : ""}`}
-              style={{ left: `${topic.x}px`, top: `${topic.y}px` }}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() =>
-                props.onSelectNode({
-                  discipline: "수학",
-                  stage: topic.level,
-                  topic: topic.label,
-                })
-              }
-              aria-label={`${topic.label} 노드를 선택하기`}
-              aria-pressed={topic.active}
-            >
-              <span className="graph-node__core" />
-              <span className="graph-node__label">{topic.label}</span>
-            </button>
-          ))}
+            {graph.stageNodes.map((stage) => (
+              <button
+                key={stage.level}
+                type="button"
+                className={`graph-node graph-node--stage ${stage.active ? "is-active" : ""}`}
+                style={{ left: `${stage.x}px`, top: `${stage.y}px` }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() =>
+                  props.onSelectNode({
+                    kind: "stage",
+                    discipline: props.selectedDiscipline,
+                    stage: stage.level,
+                    topic: null,
+                  })
+                }
+                aria-label={`${stage.level} 노드를 선택하기`}
+                aria-pressed={stage.active}
+              >
+                <span className="graph-node__core" />
+                <span className="graph-node__label">
+                  {stage.level}
+                  <small className="graph-node__meta">{stage.title}</small>
+                </span>
+              </button>
+            ))}
+
+            {graph.topicNodes.map((topic) => (
+              <button
+                key={`${topic.level}:${topic.label}`}
+                type="button"
+                className={`graph-node graph-node--topic ${topic.active ? "is-active" : ""} ${topic.muted ? "is-muted" : ""}`}
+                style={{ left: `${topic.x}px`, top: `${topic.y}px` }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() =>
+                  props.onSelectNode({
+                    kind: "topic",
+                    discipline: props.selectedDiscipline,
+                    stage: topic.level,
+                    topic: topic.label,
+                  })
+                }
+                aria-label={`${topic.label} 노드를 선택하기`}
+                aria-pressed={topic.active}
+              >
+                <span className="graph-node__core" />
+                <span className="graph-node__label">{topic.label}</span>
+              </button>
+            ))}
+
+            {activeSelectionPoint ? (
+              <button
+                type="button"
+                className="graph-node-read"
+                style={{
+                  left: `${activeSelectionPoint.x + 54}px`,
+                  top: `${activeSelectionPoint.y - 24}px`,
+                }}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  props.onReadNode(activeSelection);
+                }}
+              >
+                읽기
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

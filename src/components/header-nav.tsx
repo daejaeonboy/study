@@ -3,19 +3,13 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
+import { useAppUser } from "@/components/providers/app-user-provider";
 import { disciplineBranches, getDisciplineProfile } from "@/lib/disciplines";
 
 type UtilityItem = {
   href: string;
   label: string;
 };
-
-const utilityItems: UtilityItem[] = [
-  { href: "/", label: "Canvas" },
-  { href: "/guide", label: "Guide" },
-  { href: "/library", label: "Library" },
-  { href: "/workspace", label: "Workspace" },
-];
 
 function isActivePath(pathname: string, href: string) {
   if (href === "/") {
@@ -28,11 +22,22 @@ function isActivePath(pathname: string, href: string) {
 export function HeaderNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const appUser = useAppUser();
   const selectedDiscipline = pathname === "/" ? searchParams.get("discipline") : null;
   const selectedStage = pathname === "/" ? searchParams.get("stage") : null;
   const selectedTopic = pathname === "/" ? searchParams.get("topic") : null;
-  const mathProfile = getDisciplineProfile("수학");
-  const activeMathStage = selectedDiscipline === "수학" ? (selectedStage ?? mathProfile.stages?.[0]?.level ?? null) : null;
+  const selectedProfile = selectedDiscipline ? getDisciplineProfile(selectedDiscipline) : null;
+  const activeStage =
+    selectedDiscipline && selectedProfile?.stages?.length
+      ? (selectedStage ?? selectedProfile.stages[0]?.level ?? null)
+      : null;
+  const utilityItems: UtilityItem[] = [
+    { href: "/", label: "Canvas" },
+    { href: "/guide", label: "Guide" },
+    { href: "/library", label: "Library" },
+    { href: "/admin", label: "Admin" },
+    { href: "/auth", label: appUser ? "Account" : "Sign In" },
+  ];
 
   return (
     <nav className="explorer-shell" aria-label="Discipline Explorer">
@@ -53,6 +58,34 @@ export function HeaderNav() {
         })}
       </div>
 
+      <section className="explorer-account">
+        <span className="explorer-account__eyebrow">
+          {appUser ? "학습 계정" : "메인 사용자 인증"}
+        </span>
+        <strong className="explorer-account__name">
+          {appUser ? `${appUser.displayName}님 환영합니다` : "로그인해서 개인 서고를 시작하세요"}
+        </strong>
+        <p className="explorer-account__copy">
+          {appUser
+            ? "메인 학습 기록과 서고 흐름을 이 계정 기준으로 이어서 사용할 수 있습니다."
+            : "어드민 로그인과 별개로, 일반 사용자는 여기서 로그인해 메인 서비스를 사용합니다."}
+        </p>
+        <div className="explorer-account__actions">
+          <Link
+            href={appUser ? "/library" : "/auth?next=/library"}
+            className="explorer-account__primary"
+          >
+            {appUser ? "내 서고 열기" : "로그인"}
+          </Link>
+          <Link
+            href={appUser ? "/auth" : "/signup?next=/library"}
+            className="explorer-account__secondary"
+          >
+            {appUser ? "계정 관리" : "회원가입"}
+          </Link>
+        </div>
+      </section>
+
       <div className="explorer-section">
         <div className="explorer-section__meta">
           <span className="explorer-section__eyebrow">탐색기</span>
@@ -67,7 +100,10 @@ export function HeaderNav() {
               <summary className="explorer-branch__summary">{branch.label}</summary>
               <div className="explorer-branch__children">
                 {branch.disciplines.map((discipline) => {
-                  if (discipline !== "수학") {
+                  const disciplineProfile = getDisciplineProfile(discipline);
+                  const hasStages = Boolean(disciplineProfile.stages?.length);
+
+                  if (!hasStages) {
                     return (
                       <Link
                         key={discipline}
@@ -88,18 +124,18 @@ export function HeaderNav() {
                         {discipline}
                       </Link>
 
-                      {selectedDiscipline === "수학" ? (
+                      {selectedDiscipline === discipline ? (
                         <div className="explorer-subtree">
-                          {(mathProfile.stages ?? []).map((stage) => (
+                          {(disciplineProfile.stages ?? []).map((stage) => (
                             <div key={stage.level} className="explorer-stage">
                               <Link
                                 href={`/?discipline=${encodeURIComponent(discipline)}&stage=${encodeURIComponent(stage.level)}`}
-                                className={`explorer-stage__link ${activeMathStage === stage.level ? "active" : ""}`}
+                                className={`explorer-stage__link ${activeStage === stage.level ? "active" : ""}`}
                               >
                                 {stage.level}
                               </Link>
 
-                              {activeMathStage === stage.level ? (
+                              {activeStage === stage.level ? (
                                 <div className="explorer-topic-list">
                                   {stage.topics.length ? (
                                     stage.topics.map((topic) => (

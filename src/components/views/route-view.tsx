@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 
+import { useEditorial } from "@/components/providers/editorial-provider";
 import { TopicLinkCard } from "@/components/topic-link-card";
 import type { LearningPath, Topic } from "@/lib/domain";
 import { formatDepth } from "@/lib/utils";
@@ -11,7 +14,9 @@ export function RouteView({
   path: LearningPath;
   topics: Topic[];
 }) {
-  const findTopic = (slug: string) => topics.find((topic) => topic.slug === slug);
+  const { getTopic } = useEditorial();
+  const resolvedTopics = topics.map(getTopic);
+  const findTopic = (slug: string) => resolvedTopics.find((topic) => topic.slug === slug);
   const startTopic = findTopic(path.startTopicSlug);
   const currentTopic = findTopic(path.currentTopicSlug);
   const currentStep = path.steps.find((step) => step.status === "current") ?? path.steps[0];

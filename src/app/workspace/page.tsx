@@ -1,17 +1,14 @@
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 
-import { WorkspaceView } from "@/components/views/workspace-view";
-import { getTopics, getWorkspace } from "@/lib/repository";
-
-export default async function WorkspacePage() {
-  const [workspace, topics] = await Promise.all([
-    getWorkspace("black-hole-bridge"),
-    getTopics(),
-  ]);
-
-  if (!workspace) {
-    notFound();
-  }
-
-  return <WorkspaceView workspace={workspace} topics={topics} />;
+export default async function WorkspacePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ topic?: string }>;
+}) {
+  const { topic } = await searchParams;
+  redirect(
+    topic
+      ? `/admin/topics/${encodeURIComponent(topic)}/edit`
+      : "/admin/topics",
+  );
 }

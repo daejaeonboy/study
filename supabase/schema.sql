@@ -12,8 +12,39 @@ create table if not exists topics (
     tags jsonb not null default '[]'::jsonb,
     estimated_difficulty smallint not null default 1 check (estimated_difficulty between 1 and 5),
     status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
+    verification_status text not null default 'generated' check (
+        verification_status in ('generated', 'reviewing', 'verified', 'published', 'deprecated')
+    ),
+    source_origin text not null default 'legacy-seed',
+    revision integer not null default 1,
+    imported_at timestamptz not null default now(),
+    last_reviewed_at timestamptz,
+    editorial_summary text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
+);
+
+alter table topics add column if not exists verification_status text not null default 'generated';
+alter table topics add column if not exists source_origin text not null default 'legacy-seed';
+alter table topics add column if not exists revision integer not null default 1;
+alter table topics add column if not exists imported_at timestamptz not null default now();
+alter table topics add column if not exists last_reviewed_at timestamptz;
+alter table topics add column if not exists editorial_summary text;
+
+create table if not exists topic_bundle_revisions (
+    id uuid primary key default gen_random_uuid(),
+    topic_slug text not null,
+    revision integer not null,
+    verification_status text not null default 'generated' check (
+        verification_status in ('generated', 'reviewing', 'verified', 'published', 'deprecated')
+    ),
+    source_origin text not null,
+    editorial_summary text,
+    bundle_payload jsonb not null,
+    imported_at timestamptz not null default now(),
+    last_reviewed_at timestamptz,
+    created_at timestamptz not null default now(),
+    unique (topic_slug, revision)
 );
 
 create table if not exists topic_layers (
@@ -86,6 +117,34 @@ create table if not exists users (
     email text unique,
     display_name text,
     created_at timestamptz not null default now()
+);
+
+create table if not exists editorial_users (
+    id text primary key,
+    display_name text not null,
+    email text not null unique,
+    role text not null check (role in ('admin', 'editor', 'reviewer')),
+    created_at timestamptz not null default now()
+);
+
+create table if not exists topic_assignments (
+    topic_slug text not null,
+    assignee_id text not null references editorial_users(id) on delete cascade,
+    assigned_by_id text not null references editorial_users(id) on delete cascade,
+    assigned_at timestamptz not null default now(),
+    note text,
+    primary key (topic_slug)
+);
+
+create table if not exists topic_review_tasks (
+    id text primary key,
+    topic_slug text not null,
+    status text not null check (status in ('pending', 'in_review', 'changes_requested', 'approved')),
+    requester_id text not null references editorial_users(id) on delete cascade,
+    reviewer_id text references editorial_users(id) on delete set null,
+    requested_at timestamptz not null default now(),
+    reviewed_at timestamptz,
+    comment text
 );
 
 create table if not exists user_progress (
@@ -166,6 +225,10 @@ create table if not exists workspace_sources (
 );
 
 create index if not exists idx_topics_category on topics(category);
+create index if not exists idx_topics_verification_status on topics(verification_status);
+create index if not exists idx_topic_bundle_revisions_slug on topic_bundle_revisions(topic_slug, revision desc);
+create index if not exists idx_topic_assignments_assignee on topic_assignments(assignee_id, assigned_at desc);
+create index if not exists idx_topic_review_tasks_status on topic_review_tasks(status, requested_at desc);
 create index if not exists idx_topic_relations_from on topic_relations(from_topic_id, relation_type);
 create index if not exists idx_topic_sources_topic on topic_sources(topic_id);
 create index if not exists idx_user_progress_user on user_progress(user_id, last_viewed_at desc);

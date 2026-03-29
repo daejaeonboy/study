@@ -26,7 +26,7 @@ const HOME_LEFT_MAX_WIDTH = 460;
 const HOME_RIGHT_DEFAULT_WIDTH = 430;
 const HOME_RIGHT_MIN_WIDTH = 340;
 const HOME_RIGHT_MAX_WIDTH = 620;
-const HOME_SIDEBAR_EDGE = 18;
+const HOME_SIDEBAR_EDGE = 0;
 
 const sections: Array<{ test: (pathname: string) => boolean; meta: SectionMeta }> = [
   {
@@ -80,13 +80,13 @@ const sections: Array<{ test: (pathname: string) => boolean; meta: SectionMeta }
     },
   },
   {
-    test: (pathname) => pathname.startsWith("/workspace"),
+    test: (pathname) => pathname.startsWith("/admin"),
     meta: {
-      title: "작업실",
-      hint: "노트, 출처, 질문을 연결하면서 생각을 구조화하는 연구 보드입니다.",
-      fileName: "workspace-canvas.md",
-      outline: ["핵심 질문", "논점 보드", "출처", "작업 메모", "다음 행동"],
-      links: ["주제 카드 열기", "출처 정리", "서고에 아카이브"],
+      title: "어드민",
+      hint: "여러 운영진이 Topic을 할당하고 검수 상태를 관리하는 운영 콘솔입니다.",
+      fileName: "admin-console.md",
+      outline: ["운영 현황", "Topic 목록", "담당자", "검수 큐", "운영 상세", "Topic 편집"],
+      links: ["Topic 운영 목록", "검수 큐 이동", "운영 상세에서 바로 편집"],
     },
   },
 ];
@@ -223,6 +223,10 @@ export function SiteShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const currentSection = resolveSection(pathname);
   const isCanvasHome = pathname === "/";
+  const isAdminPage = pathname.startsWith("/admin");
+  const isStandaloneAuthPage =
+    pathname.startsWith("/auth") || pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const hideContextSidebar = isAdminPage;
   const [homeSidebarWidths, setHomeSidebarWidths] = useState({
     left: HOME_LEFT_DEFAULT_WIDTH,
     right: HOME_RIGHT_DEFAULT_WIDTH,
@@ -293,8 +297,16 @@ export function SiteShell({ children }: { children: ReactNode }) {
     ? { width: `${homeSidebarWidths.right}px` }
     : undefined;
 
+  if (isCanvasHome || isStandaloneAuthPage) {
+    return <>{children}</>;
+  }
+
   return (
-    <div className={`page-shell ${isCanvasHome ? "page-shell--canvas" : ""}`}>
+    <div
+      className={`page-shell ${isCanvasHome ? "page-shell--canvas" : ""} ${
+        hideContextSidebar ? "page-shell--single-pane" : ""
+      }`}
+    >
       <aside className="vault-sidebar" style={homeLeftSidebarStyle}>
         {isCanvasHome ? (
           <div
@@ -354,49 +366,51 @@ export function SiteShell({ children }: { children: ReactNode }) {
         <div className="canvas-content">{children}</div>
       </main>
 
-      <aside
-        className={`context-sidebar ${isCanvasHome ? "context-sidebar--prose" : ""}`}
-        style={homeRightSidebarStyle}
-      >
-        {isCanvasHome ? (
-          <>
-            <div
-              className="sidebar-resizer sidebar-resizer--left"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="오른쪽 사이드바 너비 조절"
-              onPointerDown={handleResizeStart("right")}
-            />
-            <Suspense fallback={<article className="context-prose" />}>
-              <CanvasContextSidebar />
-            </Suspense>
-          </>
-        ) : (
-          <>
-            <section className="context-panel">
-              <h2 className="outline-title">문서 구조</h2>
-              <div className="context-list">
-                {currentSection.outline.map((item) => (
-                  <div key={item} className="context-list__item">
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
+      {hideContextSidebar ? null : (
+        <aside
+          className={`context-sidebar ${isCanvasHome ? "context-sidebar--prose" : ""}`}
+          style={homeRightSidebarStyle}
+        >
+          {isCanvasHome ? (
+            <>
+              <div
+                className="sidebar-resizer sidebar-resizer--left"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="오른쪽 사이드바 너비 조절"
+                onPointerDown={handleResizeStart("right")}
+              />
+              <Suspense fallback={<article className="context-prose" />}>
+                <CanvasContextSidebar />
+              </Suspense>
+            </>
+          ) : (
+            <>
+              <section className="context-panel">
+                <h2 className="outline-title">문서 구조</h2>
+                <div className="context-list">
+                  {currentSection.outline.map((item) => (
+                    <div key={item} className="context-list__item">
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
 
-            <section className="context-panel">
-              <h2 className="outline-title">연결 문서</h2>
-              <div className="context-list">
-                {currentSection.links.map((item) => (
-                  <div key={item} className="context-list__item">
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </>
-        )}
-      </aside>
+              <section className="context-panel">
+                <h2 className="outline-title">연결 문서</h2>
+                <div className="context-list">
+                  {currentSection.links.map((item) => (
+                    <div key={item} className="context-list__item">
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+        </aside>
+      )}
     </div>
   );
 }

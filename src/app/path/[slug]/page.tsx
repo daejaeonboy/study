@@ -1,7 +1,6 @@
-import { notFound } from "next/navigation";
-
 import { RouteView } from "@/components/views/route-view";
-import { getLearningPath, getTopicBySlug, getTopics } from "@/lib/repository";
+import { samplePaths } from "@/lib/data/seed";
+import { getTopics } from "@/lib/repository";
 
 export default async function PathPage({
   params,
@@ -9,15 +8,8 @@ export default async function PathPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [topic, path, topics] = await Promise.all([
-    getTopicBySlug(slug),
-    getLearningPath(slug),
-    getTopics(),
-  ]);
-
-  if (!topic) {
-    notFound();
-  }
+  const topics = await getTopics();
+  const path = samplePaths.find((item) => item.slug === slug) ?? samplePaths[0];
 
   return <RouteView path={path} topics={topics} />;
 }

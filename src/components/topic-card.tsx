@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import type { LayerDepth, Topic } from "@/lib/domain";
-import { formatDepth } from "@/lib/utils";
+import { formatDepth, formatVerificationStatus } from "@/lib/utils";
 
 type TopicCardProps = {
   topic: Topic;
@@ -12,6 +12,9 @@ type TopicCardProps = {
 
 export function TopicCard({ topic, isSaved, onToggleSave, progressDepth }: TopicCardProps) {
   const progressLabel = progressDepth ? formatDepth(progressDepth) : "Light";
+  const verificationLabel = topic.verificationStatus
+    ? formatVerificationStatus(topic.verificationStatus)
+    : null;
 
   return (
     <Link href={`/topic/${topic.slug}`} className="topic-card card-interactive" style={{ padding: '24px' }}>
@@ -21,6 +24,11 @@ export function TopicCard({ topic, isSaved, onToggleSave, progressDepth }: Topic
           <span className={`chip ${progressDepth ? "chip--accent" : ""}`} style={{ fontSize: '0.65rem' }}>
             {progressLabel}
           </span>
+          {verificationLabel ? (
+            <span className="chip" style={{ fontSize: '0.65rem' }}>
+              {verificationLabel}
+            </span>
+          ) : null}
         </div>
         {onToggleSave ? (
           <button
@@ -43,11 +51,16 @@ export function TopicCard({ topic, isSaved, onToggleSave, progressDepth }: Topic
         <p className="muted" style={{ fontSize: '0.85rem', lineHeight: '1.5', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {topic.summary}
         </p>
+        {topic.editorialSummary ? (
+          <p className="muted" style={{ fontSize: '0.72rem', lineHeight: '1.45' }}>
+            {topic.editorialSummary}
+          </p>
+        ) : null}
       </div>
 
       <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span className="caption" style={{ opacity: 0.6, fontSize: '0.6rem' }}>
-          {topic.related.length} Links · {topic.sources.length} Sources
+          {topic.related.length} Links · {topic.sources.length} Sources · r{topic.revision ?? 1}
         </span>
         <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-strong)' }}>
           Research →

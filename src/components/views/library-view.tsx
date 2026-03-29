@@ -3,10 +3,16 @@
 import Link from "next/link";
 
 import { useLibrary } from "@/components/providers/library-provider";
-import type { Topic } from "@/lib/domain";
+import type { AppUser, Topic } from "@/lib/domain";
 import { formatDepth } from "@/lib/utils";
 
-export function LibraryView({ topics }: { topics: Topic[] }) {
+export function LibraryView({
+  topics,
+  user,
+}: {
+  topics: Topic[];
+  user: AppUser;
+}) {
   const { savedSlugs, recentSlugs, notes, layerProgress, toggleSave } = useLibrary();
   const bySlug = new Map(topics.map((topic) => [topic.slug, topic]));
   const savedTopics = savedSlugs.map((slug) => bySlug.get(slug)).filter(Boolean) as Topic[];
@@ -62,7 +68,7 @@ export function LibraryView({ topics }: { topics: Topic[] }) {
           <span className="caption" style={{ color: 'var(--accent)' }}>PERSONAL ARCHIVE</span>
           <h1 className="hero-title">지식의 서고</h1>
           <p className="hero-copy">
-            당신이 탐구한 통찰과 궤적의 기록입니다. 
+            {user.displayName}님이 탐구한 통찰과 궤적의 기록입니다. 
             서고는 단순한 저장소가 아닌, 새로운 사유가 시작되는 활성 작업판입니다.
           </p>
         </div>
