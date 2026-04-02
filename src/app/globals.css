@@ -2612,7 +2612,29 @@ textarea {
 }
 
 .knowledge-main-shell.is-ai-collapsed {
-  grid-template-columns: minmax(0, 1fr) 48px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.knowledge-main__assistant-toggle {
+  width: 44px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid #eceff3;
+  border-radius: 0;
+  background: #ffffff;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.16s ease;
+  margin-right: -12px;
+  cursor: pointer;
+}
+
+.knowledge-main__assistant-toggle:hover {
+  background: #f9fafb;
+  color: #111827;
 }
 
 .knowledge-main {
@@ -2626,13 +2648,21 @@ textarea {
 
 .knowledge-main__sidebar-toggle {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 12;
-  width: 28px;
-  height: 28px;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  width: 44px;
+  height: 42px;
   padding: 0;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  border: 0;
+  border-right: 1px solid #eceff3;
+  border-radius: 0;
+  background: #ffffff;
+  color: #6b7280;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .knowledge-tabbar {
@@ -2643,6 +2673,11 @@ textarea {
   border-bottom: 1px solid #eceff3;
   background: #ffffff;
   min-height: 42px;
+  position: relative;
+}
+
+.knowledge-tabbar.has-sidebar-toggle .knowledge-tabbar__scroll {
+  padding-left: 44px;
 }
 
 .knowledge-tabbar__scroll {
@@ -2674,17 +2709,19 @@ textarea {
   height: 30px;
   padding: 0 12px;
   border-radius: 8px;
-  background: #1e293b;
+  background: #0f172a;
   color: #ffffff;
   text-decoration: none;
   font-size: 0.76rem;
-  font-weight: 700;
-  transition: all 0.2s ease;
+  font-weight: 800;
+  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.1);
 }
 
 .knowledge-tabbar__user-btn:hover {
-  background: #0f172a;
-  transform: translateY(-1px);
+  background: #1e293b;
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
 }
 
 .knowledge-tabbar__user-btn.is-authenticated {
@@ -3399,51 +3436,58 @@ textarea {
   min-width: 0;
   min-height: 0;
   position: relative;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 14px;
-  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 16px 16px 22px;
   border-left: 1px solid #e5e7eb;
   background: #fcfcfd;
   overflow: hidden;
 }
 
-.knowledge-ai-sidebar__collapse,
-.knowledge-ai-sidebar__reopen {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #ffffff;
+.knowledge-ai-sidebar__header {
+  display: grid;
+  padding-right: 4px;
+}
+
+.knowledge-ai-sidebar__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.knowledge-ai-sidebar__title {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   color: #111827;
-  cursor: pointer;
-  font: inherit;
   font-weight: 700;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .knowledge-ai-sidebar__collapse {
-  position: absolute;
-  top: 18px;
-  right: 16px;
-  z-index: 2;
-  min-width: 34px;
-  min-height: 34px;
-}
-
-.knowledge-ai-sidebar__collapsed {
+  position: static;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #6b7280;
+  cursor: pointer;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding-top: 14px;
-  background: #fcfcfd;
-  border-left: 1px solid #e5e7eb;
+  transition: all 0.16s ease;
+  box-shadow: none;
 }
 
-.knowledge-ai-sidebar__reopen {
-  min-width: 34px;
-  min-height: 72px;
-  padding: 8px 0;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
+.knowledge-ai-sidebar__collapse:hover {
+  background: #f9fafb;
+  color: #111827;
+  border-color: #d1d5db;
 }
 
 .knowledge-ai-sidebar__messages {
@@ -5720,32 +5764,44 @@ textarea {
   transition: none;
 }
 
-/* Auth Page Styling */
+/* Auth Page Styling - Modern Refinement */
 .auth-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: 
-    radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.05), transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(34, 197, 94, 0.05), transparent 40%),
-    #f8fafc;
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(34, 197, 94, 0.05) 0px, transparent 50%);
 }
 
 .auth-card {
   width: 100%;
-  max-width: 440px;
+  max-width: 420px;
   background: #ffffff;
-  border-radius: 28px;
-  padding: 48px 40px;
+  border-radius: 32px;
+  padding: 56px 48px;
   box-shadow: 
-    0 4px 6px -1px rgba(0, 0, 0, 0.02),
-    0 20px 40px -8px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+    0 1px 3px 0 rgba(0, 0, 0, 0.02),
+    0 25px 50px -12px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.6);
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 40px;
+  animation: auth-card-fade-in 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes auth-card-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .auth-card__header {
@@ -5753,37 +5809,39 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
 }
 
 .auth-card__logo {
-  width: 48px;
-  height: 48px;
-  background: #1e293b;
+  width: 54px;
+  height: 54px;
+  background: #0f172a;
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
-  font-weight: 800;
-  font-size: 1.25rem;
+  border-radius: 16px;
+  font-weight: 900;
+  font-size: 1.4rem;
   text-decoration: none;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
 }
 
 .auth-card__title {
-  font-size: 1.75rem;
-  font-weight: 800;
+  font-size: 1.85rem;
+  font-weight: 900;
   color: #0f172a;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   margin: 0;
 }
 
 .auth-card__description {
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: #64748b;
-  line-height: 1.6;
+  line-height: 1.65;
   margin: 0;
+  max-width: 28ch;
 }
 
 .auth-card__message {
@@ -5815,54 +5873,64 @@ textarea {
 }
 
 .auth-form__field label {
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #94a3b8;
-  margin-left: 4px;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-left: 2px;
 }
 
 .auth-form__field input {
   width: 100%;
-  height: 48px;
-  padding: 0 16px;
+  height: 52px;
+  padding: 0 18px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
   font-size: 1rem;
   color: #0f172a;
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.auth-form__field input:hover {
+  border-color: #cbd5e1;
 }
 
 .auth-form__field input:focus {
   background: #ffffff;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  border-color: #111827;
+  box-shadow: 0 0 0 4px rgba(17, 24, 39, 0.06);
 }
 
 .auth-form__submit {
   width: 100%;
-  height: 52px;
-  background: #1e293b;
+  height: 56px;
+  background: #111827;
   color: #ffffff;
   border: 0;
-  border-radius: 16px;
-  font-size: 1rem;
-  font-weight: 700;
+  border-radius: 18px;
+  font-size: 1.05rem;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   text-decoration: none;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+  margin-top: 8px;
 }
 
 .auth-form__submit:hover {
-  background: #0f172a;
-  transform: translateY(-1px);
-  box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.15);
+  background: #1e293b;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+}
+
+.auth-form__submit:active {
+  transform: translateY(0);
 }
 
 .auth-card__actions {

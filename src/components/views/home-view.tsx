@@ -105,6 +105,52 @@ type AiIntegrationSettings = {
   systemPrompt: string;
 };
 
+type AiModelOption = {
+  value: string;
+  label: string;
+};
+
+const OPENAI_MODEL_OPTIONS: AiModelOption[] = [
+  { value: "gpt-5.4", label: "GPT-5.4" },
+  { value: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
+  { value: "gpt-5.4-nano", label: "GPT-5.4 Nano" },
+  { value: "gpt-5.1", label: "GPT-5.1" },
+  { value: "gpt-5-mini", label: "GPT-5 Mini" },
+  { value: "gpt-5-nano", label: "GPT-5 Nano" },
+  { value: "gpt-5", label: "GPT-5" },
+  { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+  { value: "gpt-4o", label: "GPT-4o" },
+  { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+  { value: "gpt-4.1", label: "GPT-4.1" },
+  { value: "gpt-4.1-nano", label: "GPT-4.1 Nano" },
+];
+
+const GEMINI_MODEL_OPTIONS: AiModelOption[] = [
+  { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview" },
+  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview" },
+  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash-Lite Preview" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+];
+
+const GROK_MODEL_OPTIONS: AiModelOption[] = [
+  { value: "grok-4.20-reasoning", label: "Grok 4.20 Reasoning" },
+  { value: "grok-4.20-beta-latest-non-reasoning", label: "Grok 4.20 Beta Latest Non-Reasoning" },
+  { value: "grok-4", label: "Grok 4 (stable alias)" },
+  { value: "grok-4-1-fast-reasoning", label: "Grok 4.1 Fast Reasoning" },
+  { value: "grok-4-fast-non-reasoning", label: "Grok 4 Fast" },
+  { value: "grok-4-fast-reasoning", label: "Grok 4 Fast Reasoning" },
+  { value: "grok-code-fast-1", label: "Grok Code Fast 1" },
+];
+
+const AI_MODEL_OPTIONS: Record<AiIntegrationSettings["provider"], AiModelOption[]> = {
+  openai: OPENAI_MODEL_OPTIONS,
+  gemini: GEMINI_MODEL_OPTIONS,
+  grok: GROK_MODEL_OPTIONS,
+  custom: [...OPENAI_MODEL_OPTIONS, ...GEMINI_MODEL_OPTIONS, ...GROK_MODEL_OPTIONS],
+};
+
 type ExternalAssistantMessage = {
   role: "user" | "assistant";
   content: string;
@@ -115,7 +161,7 @@ const DEFAULT_AI_SETTINGS: AiIntegrationSettings = {
   provider: "openai",
   apiUrl: "https://api.openai.com/v1/chat/completions",
   apiKey: "",
-  model: "gpt-4o-mini",
+  model: "gpt-5.4",
   systemPrompt:
     "당신은 친절한 학술 학습 도우미입니다. 한국어로 명확하고 직접적인 답변을 제공하세요.",
 };
@@ -209,6 +255,18 @@ function formatAssistantReply(recommendation: GuideRecommendation) {
     .join("\n\n");
 }
 
+function getAiModelOptions(provider: AiIntegrationSettings["provider"]) {
+  return AI_MODEL_OPTIONS[provider];
+}
+
+function getDefaultModelForProvider(provider: AiIntegrationSettings["provider"]) {
+  return getAiModelOptions(provider)[0]?.value ?? DEFAULT_AI_SETTINGS.model;
+}
+
+function isSupportedAiModel(provider: AiIntegrationSettings["provider"], model: string) {
+  return getAiModelOptions(provider).some((option) => option.value === model);
+}
+
 function normalizeAiSettings(raw: string | null): AiIntegrationSettings {
   if (!raw) {
     return DEFAULT_AI_SETTINGS;
@@ -216,25 +274,27 @@ function normalizeAiSettings(raw: string | null): AiIntegrationSettings {
 
   try {
     const parsed = JSON.parse(raw) as Partial<AiIntegrationSettings>;
+    const provider =
+      parsed.provider === "openai" ||
+      parsed.provider === "gemini" ||
+      parsed.provider === "grok" ||
+      parsed.provider === "custom"
+        ? parsed.provider
+        : DEFAULT_AI_SETTINGS.provider;
+    const model =
+      typeof parsed.model === "string" && parsed.model.trim()
+        ? parsed.model.trim()
+        : getDefaultModelForProvider(provider);
 
     return {
       enabled: Boolean(parsed.enabled),
-      provider:
-        parsed.provider === "openai" ||
-        parsed.provider === "gemini" ||
-        parsed.provider === "grok" ||
-        parsed.provider === "custom"
-          ? parsed.provider
-          : DEFAULT_AI_SETTINGS.provider,
+      provider,
       apiUrl:
         typeof parsed.apiUrl === "string" && parsed.apiUrl.trim()
           ? parsed.apiUrl
           : DEFAULT_AI_SETTINGS.apiUrl,
       apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : "",
-      model:
-        typeof parsed.model === "string" && parsed.model.trim()
-          ? parsed.model
-          : DEFAULT_AI_SETTINGS.model,
+      model: isSupportedAiModel(provider, model) ? model : getDefaultModelForProvider(provider),
       systemPrompt:
         typeof parsed.systemPrompt === "string"
           ? parsed.systemPrompt
@@ -708,14 +768,15 @@ export function HomeView() {
       if (key === "provider") {
         if (value === "openai") {
           next.apiUrl = "https://api.openai.com/v1/chat/completions";
-          next.model = "gpt-4o-mini";
         } else if (value === "gemini") {
           next.apiUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-          next.model = "gemini-2.0-flash";
         } else if (value === "grok") {
           next.apiUrl = "https://api.x.ai/v1/chat/completions";
-          next.model = "grok-2-latest";
         }
+
+        next.model = isSupportedAiModel(value, current.model)
+          ? current.model
+          : getDefaultModelForProvider(value);
       }
 
       return next;
@@ -1093,20 +1154,20 @@ export function HomeView() {
         style={assistantShellStyle}
       >
         <div className="knowledge-main">
-          {isSidebarCollapsed ? (
-            <button
-              type="button"
-              className="knowledge-main__sidebar-toggle"
-              onClick={() => setIsSidebarCollapsed(false)}
-              aria-label="왼쪽 사이드바 열기"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m9 18 6-6-6-6"/>
-              </svg>
-            </button>
-          ) : null}
+          <div className={`knowledge-tabbar ${isSidebarCollapsed ? "has-sidebar-toggle" : ""} ${isAssistantSidebarCollapsed ? "has-assistant-toggle" : ""}`}>
+            {isSidebarCollapsed ? (
+              <button
+                type="button"
+                className="knowledge-main__sidebar-toggle"
+                onClick={() => setIsSidebarCollapsed(false)}
+                aria-label="왼쪽 사이드바 열기"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+              </button>
+            ) : null}
 
-          <div className="knowledge-tabbar">
             <div className="knowledge-tabbar__scroll">
               <button
                 type="button"
@@ -1162,6 +1223,18 @@ export function HomeView() {
                   "로그인"
                 )}
               </Link>
+              {isAssistantSidebarCollapsed ? (
+                <button
+                  type="button"
+                  className="knowledge-main__assistant-toggle"
+                  onClick={() => setIsAssistantSidebarCollapsed(false)}
+                  aria-label="오른쪽 인공지능 사이드바 열기"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m15 18-6-6 6-6"/>
+                  </svg>
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -1239,13 +1312,17 @@ export function HomeView() {
 
                       <label className="knowledge-settings__field">
                         <span>모델명</span>
-                        <input
-                          type="text"
+                        <select
                           className="knowledge-settings__input"
                           value={aiSettings.model}
                           onChange={(event) => updateAiSettings("model", event.target.value)}
-                          placeholder="모델명을 입력하세요 (예: gpt-4o-mini)"
-                        />
+                        >
+                          {getAiModelOptions(aiSettings.provider).map((option) => (
+                            <option key={`${aiSettings.provider}:${option.value}`} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
                       </label>
 
                       <label className="knowledge-settings__field">
@@ -1314,18 +1391,7 @@ export function HomeView() {
             ) : null}
           </div>
         </div>
-        {isAssistantSidebarCollapsed ? (
-          <div className="knowledge-ai-sidebar__collapsed">
-            <button
-              type="button"
-              className="knowledge-ai-sidebar__reopen"
-              onClick={() => setIsAssistantSidebarCollapsed(false)}
-              aria-label="오른쪽 인공지능 사이드바 열기"
-            >
-              인공지능
-            </button>
-          </div>
-        ) : (
+        {isAssistantSidebarCollapsed ? null : (
           <>
             <div
               className="knowledge-ai-sidebar__resizer"
@@ -1336,14 +1402,21 @@ export function HomeView() {
             />
 
             <aside className="knowledge-ai-sidebar" aria-label="인공지능 대화 패널">
-              <button
-                type="button"
-                className="knowledge-ai-sidebar__collapse"
-                onClick={() => setIsAssistantSidebarCollapsed(true)}
-                aria-label="오른쪽 인공지능 사이드바 접기"
-              >
-                →
-              </button>
+              <header className="knowledge-ai-sidebar__header">
+                <div className="knowledge-ai-sidebar__topbar">
+                  <button
+                    type="button"
+                    className="knowledge-ai-sidebar__collapse"
+                    onClick={() => setIsAssistantSidebarCollapsed(true)}
+                    aria-label="오른쪽 인공지능 사이드바 접기"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m9 18 6-6 6-6"/>
+                    </svg>
+                  </button>
+                  <h2 className="knowledge-ai-sidebar__title">인공지능</h2>
+                </div>
+              </header>
 
               <div className="knowledge-ai-sidebar__messages" ref={assistantMessagesRef}>
                 {assistantMessages.length ? (
