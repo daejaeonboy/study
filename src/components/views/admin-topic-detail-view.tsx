@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 import { AdminTopicControls } from "@/components/admin/admin-topic-controls";
+import { AdminTopicStatusActions } from "@/components/admin/admin-topic-status-actions";
 import type { AdminTopicRecord, EditorialUser } from "@/lib/domain";
 import {
-  formatEditorialRole,
   formatReviewTaskStatus,
   formatVerificationStatus,
 } from "@/lib/utils";
@@ -39,132 +39,83 @@ export function AdminTopicDetailView({
   const { topic, assignee, assignedBy, assignment, latestReviewTask } = record;
 
   return (
-    <section className="view">
-      <header className="stack" style={{ gap: "var(--space-6)" }}>
-        <div className="chip-row">
-          <span className="chip chip--alt">{topic.category}</span>
-          <span className="chip">
-            {formatVerificationStatus(topic.verificationStatus ?? "generated")}
-          </span>
-          <span className="chip">r{topic.revision ?? 1}</span>
+    <section className="admin-page">
+      <header className="admin-page__header">
+        <div className="stack" style={{ gap: "10px", maxWidth: "860px" }}>
+          <div className="chip-row">
+            <span className="chip chip--alt">{topic.category}</span>
+            <span className="chip">{formatVerificationStatus(topic.verificationStatus ?? "generated")}</span>
+            <span className="chip">r{topic.revision ?? 1}</span>
+          </div>
+
+          <h1 className="admin-page__title">{topic.title}</h1>
+          {topic.summary ? <p className="admin-page__lead">{topic.summary}</p> : null}
         </div>
 
-        <div className="stack" style={{ gap: "var(--space-4)" }}>
-          <h1 className="hero-title">{topic.title}</h1>
-          <p className="hero-copy" style={{ maxWidth: "880px" }}>
-            {topic.summary}
-          </p>
-          <p className="muted" style={{ maxWidth: "880px" }}>
-            {topic.editorialSummary ?? "운영 메모가 아직 없습니다."}
-          </p>
-        </div>
-
-        <div className="hero-actions">
+        <div className="admin-page__actions">
           <Link href={`/admin/topics/${encodeURIComponent(topic.slug)}/edit`} className="btn btn-primary">
-            이 Topic 편집
+            편집
           </Link>
           <Link href={`/topic/${topic.slug}`} className="btn btn-secondary">
-            사용자 화면 보기
-          </Link>
-          <Link href="/admin/review-queue" className="btn btn-secondary">
-            검수 큐로 이동
+            사용자 화면
           </Link>
         </div>
       </header>
 
-      <div className="feature-grid" style={{ marginTop: "var(--space-8)" }}>
-        <section className="stack" style={{ gap: "var(--space-6)" }}>
-          <div className="section-head">
-            <h2 className="section-title">운영 컨텍스트</h2>
-          </div>
+      <div className="admin-detail">
+        <section className="admin-section">
+          <div className="admin-detail__grid">
+            <article className="admin-detail-card">
+              <span>상태</span>
+              <strong>{formatVerificationStatus(topic.verificationStatus ?? "generated")}</strong>
+              <AdminTopicStatusActions
+                slug={topic.slug}
+                currentStatus={topic.verificationStatus ?? "generated"}
+                currentUserRole={currentUser.role}
+              />
+            </article>
 
-          <div className="grid-2">
-            <article className="surface" style={{ padding: "var(--space-6)" }}>
-              <span className="caption">담당자</span>
-              <strong style={{ display: "block", marginTop: "8px", fontSize: "1.05rem" }}>
-                {assignee?.displayName ?? "미할당"}
-              </strong>
-              <p className="muted" style={{ marginTop: "8px" }}>
-                배정자 {assignedBy?.displayName ?? "기록 없음"}
-              </p>
-              <p className="muted">{assignment?.note ?? "할당 메모 없음"}</p>
-              <p className="caption" style={{ marginTop: "8px" }}>
-                할당 시각 {formatTimestamp(assignment?.assignedAt)}
+            <article className="admin-detail-card">
+              <span>담당</span>
+              <strong>{assignee?.displayName ?? "미할당"}</strong>
+              <p>
+                {assignedBy ? `배정 ${assignedBy.displayName}` : "배정 기록 없음"}
+                {assignment?.note ? ` · ${assignment.note}` : ""}
               </p>
             </article>
 
-            <article className="surface-elevated" style={{ padding: "var(--space-6)" }}>
-              <span className="caption">최근 검수 작업</span>
-              <strong style={{ display: "block", marginTop: "8px", fontSize: "1.05rem" }}>
-                {latestReviewTask
-                  ? formatReviewTaskStatus(latestReviewTask.status)
-                  : "검수 요청 없음"}
+            <article className="admin-detail-card">
+              <span>검수</span>
+              <strong>{latestReviewTask ? formatReviewTaskStatus(latestReviewTask.status) : "요청 없음"}</strong>
+              <p>{formatTimestamp(latestReviewTask?.requestedAt ?? topic.lastReviewedAt)}</p>
+            </article>
+
+            <article className="admin-detail-card">
+              <span>구성</span>
+              <strong>
+                출처 {topic.sources.length} · 선수 {topic.prerequisites.length} · 연결 {topic.related.length}
               </strong>
-              <p className="muted" style={{ marginTop: "8px" }}>
-                {latestReviewTask?.comment ?? "최근 검수 코멘트가 없습니다."}
-              </p>
-              <p className="caption" style={{ marginTop: "8px" }}>
-                최근 요청 {formatTimestamp(latestReviewTask?.requestedAt)}
-              </p>
+              <p>{formatTimestamp(topic.lastReviewedAt ?? topic.importedAt)}</p>
             </article>
           </div>
 
-          <article className="surface" style={{ padding: "var(--space-6)" }}>
-            <div className="section-head">
-              <h2 className="section-title">운영 체크포인트</h2>
-            </div>
-            <div className="grid-3" style={{ marginTop: "var(--space-5)" }}>
-              <div className="surface" style={{ padding: "var(--space-5)", background: "var(--bg-subtle)" }}>
-                <span className="caption">선수지식</span>
-                <strong style={{ display: "block", marginTop: "8px" }}>{topic.prerequisites.length}</strong>
-              </div>
-              <div className="surface" style={{ padding: "var(--space-5)", background: "var(--bg-subtle)" }}>
-                <span className="caption">관련 Topic</span>
-                <strong style={{ display: "block", marginTop: "8px" }}>{topic.related.length}</strong>
-              </div>
-              <div className="surface" style={{ padding: "var(--space-5)", background: "var(--bg-subtle)" }}>
-                <span className="caption">출처 수</span>
-                <strong style={{ display: "block", marginTop: "8px" }}>{topic.sources.length}</strong>
-              </div>
-            </div>
+          <article className="admin-detail-card">
+            <span>운영 메모</span>
+            <strong>{topic.editorialSummary?.trim() ? "메모 있음" : "메모 없음"}</strong>
+            <p>{topic.editorialSummary?.trim() || "기록된 메모가 없습니다."}</p>
           </article>
         </section>
 
-        <aside className="stack" style={{ gap: "var(--space-6)" }}>
-          <section className="surface-elevated" style={{ padding: "var(--space-6)" }}>
-            <div className="section-head">
-              <h2 className="section-title">현재 운영자 컨텍스트</h2>
-            </div>
-            <div className="stack" style={{ gap: "var(--space-3)", marginTop: "var(--space-5)" }}>
-              <strong style={{ fontSize: "1.05rem" }}>{currentUser.displayName}</strong>
-              <span className="muted">{currentUser.email}</span>
-              <span className="chip chip--accent">{formatEditorialRole(currentUser.role)}</span>
-            </div>
-          </section>
-
+        <aside className="stack" style={{ gap: "var(--space-4)" }}>
           <AdminTopicControls
             record={record}
             currentUser={currentUser}
             users={users}
             remotePersistenceEnabled={remotePersistenceEnabled}
           />
-
-          <section className="surface" style={{ padding: "var(--space-6)" }}>
-            <div className="section-head">
-              <h2 className="section-title">빠른 이동</h2>
-            </div>
-            <div className="stack" style={{ gap: "var(--space-3)", marginTop: "var(--space-5)" }}>
-              <Link href="/admin/topics" className="btn btn-secondary">
-                Topic 목록으로
-              </Link>
-              <Link href={`/admin/topics/${encodeURIComponent(topic.slug)}/edit`} className="btn btn-secondary">
-                Topic 편집
-              </Link>
-              <Link href={`/path/${topic.slug}`} className="btn btn-secondary">
-                경로 화면 확인
-              </Link>
-            </div>
-          </section>
+          <Link href="/admin/topics" className="btn btn-secondary btn-block" style={{ textAlign: "center" }}>
+            Topic 목록
+          </Link>
         </aside>
       </div>
     </section>

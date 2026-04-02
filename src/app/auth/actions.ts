@@ -35,7 +35,7 @@ export async function login(formData: FormData) {
   const nextPath =
     typeof formData.get("next") === "string" && (formData.get("next") as string)
       ? (formData.get("next") as string)
-      : "/library";
+      : "/";
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
@@ -63,7 +63,6 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  revalidatePath("/library");
   redirect(nextPath);
 }
 
@@ -81,7 +80,7 @@ export async function signup(formData: FormData) {
   const nextPath =
     typeof formData.get("next") === "string" && (formData.get("next") as string)
       ? (formData.get("next") as string)
-      : "/library";
+      : "/";
   const email = String(formData.get("signup_email") ?? "").trim();
   const password = String(formData.get("signup_password") ?? "");
   const displayName = String(formData.get("display_name") ?? "").trim();
@@ -136,7 +135,6 @@ export async function signup(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  revalidatePath("/library");
   redirect(nextPath);
 }
 
@@ -148,6 +146,5 @@ export async function logout() {
   }
 
   revalidatePath("/", "layout");
-  revalidatePath("/library");
   redirect("/auth?message=로그아웃했습니다.");
 }

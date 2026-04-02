@@ -1,10 +1,16 @@
 import { AdminTopicsView } from "@/components/views/admin-topics-view";
 import { requireEditorialUser } from "@/lib/editorial-auth";
-import { getAdminTopicRecords, getEditorialUsers } from "@/lib/editorial-repository";
+import {
+  getAdminTopicSummaryRecords,
+  getEditorialUsers,
+} from "@/lib/editorial-repository";
 
 export default async function AdminTopicsPage() {
-  await requireEditorialUser("/admin/topics");
-  const [records, users] = await Promise.all([getAdminTopicRecords(), getEditorialUsers()]);
+  const currentUser = await requireEditorialUser("/admin/topics");
+  const [records, users] = await Promise.all([
+    getAdminTopicSummaryRecords(),
+    getEditorialUsers(),
+  ]);
 
-  return <AdminTopicsView records={records} users={users} />;
+  return <AdminTopicsView currentUser={currentUser} records={records} users={users} />;
 }

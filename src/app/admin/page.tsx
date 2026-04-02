@@ -1,11 +1,15 @@
 import { AdminDashboardView } from "@/components/views/admin-dashboard-view";
 import { requireEditorialUser } from "@/lib/editorial-auth";
-import { getAdminTopicRecords, getEditorialUsers, getReviewQueue } from "@/lib/editorial-repository";
+import {
+  getAdminTopicSummaryRecords,
+  getEditorialUsers,
+  getReviewQueue,
+} from "@/lib/editorial-repository";
 
 export default async function AdminPage() {
   const currentUser = await requireEditorialUser("/admin");
   const [records, reviewQueue, users] = await Promise.all([
-    getAdminTopicRecords(),
+    getAdminTopicSummaryRecords(),
     getReviewQueue(),
     getEditorialUsers(),
   ]);

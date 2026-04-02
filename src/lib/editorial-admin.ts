@@ -1,5 +1,11 @@
 import { topicToBundle } from "@/content/topic-bundles";
-import type { ReviewTaskStatus, Topic, TopicAssignment, TopicReviewTask } from "@/lib/domain";
+import type {
+  ReviewTaskStatus,
+  Topic,
+  TopicAssignment,
+  TopicReviewTask,
+  VerificationStatus,
+} from "@/lib/domain";
 import { createSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/supabase/server";
 
 const learningTimeByDepth = {
@@ -38,6 +44,18 @@ function normalizeTopicStatus(topic: Topic) {
   }
 
   if (topic.verificationStatus === "deprecated") {
+    return "archived";
+  }
+
+  return "draft";
+}
+
+function normalizeVerificationStatus(status: VerificationStatus) {
+  if (status === "published") {
+    return "published";
+  }
+
+  if (status === "deprecated") {
     return "archived";
   }
 
@@ -419,5 +437,62 @@ export async function saveTopicReviewTask({
     requestedAt,
     reviewedAt,
     comment: comment?.trim() || undefined,
+  };
+}
+
+export async function saveTopicVerificationStatus({
+  topicSlug,
+  status,
+}: {
+  topicSlug: string;
+  status: VerificationStatus;
+}) {
+  const supabase = getSupabaseAdminOrThrow();
+  const now = new Date().toISOString();
+  const { data: topicRow, error: topicError } = await supabase
+    .from("topics")
+    .select("slug, revision")
+    .eq("slug", topicSlug)
+    .single();
+
+  if (topicError) {
+    throw topicError;
+  }
+
+  const revision = typeof topicRow?.revision === "number" ? topicRow.revision : null;
+
+  const { error: updateTopicError } = await supabase
+    .from("topics")
+    .update({
+      status: normalizeVerificationStatus(status),
+      verification_status: status,
+      last_reviewed_at: now,
+      updated_at: now,
+    })
+    .eq("slug", topicSlug);
+
+  if (updateTopicError) {
+    throw updateTopicError;
+  }
+
+  if (revision !== null) {
+    const { error: updateRevisionError } = await supabase
+      .from("topic_bundle_revisions")
+      .update({
+        verification_status: status,
+        last_reviewed_at: now,
+      })
+      .eq("topic_slug", topicSlug)
+      .eq("revision", revision);
+
+    if (updateRevisionError) {
+      throw updateRevisionError;
+    }
+  }
+
+  return {
+    topicSlug,
+    status,
+    updatedAt: now,
   };
 }

@@ -12,7 +12,7 @@ export default async function SignupPage({
 }) {
   const { message, next } = await searchParams;
   const appUser = await getSessionAppUser();
-  const nextPath = next?.trim() || "/library";
+  const nextPath = next?.trim() || "/";
 
   if (appUser) {
     redirect(nextPath);
@@ -26,7 +26,7 @@ export default async function SignupPage({
         </span>
         <h1 className="hero-title">메인 서비스 회원가입</h1>
         <p className="hero-copy" style={{ maxWidth: "860px" }}>
-          새 계정을 만들고 개인 서고와 학습 기록을 시작하세요.
+          새 계정을 만들고 학습 기록을 시작하세요.
         </p>
         <div className="hero-actions">
           <Link href={`/auth?next=${encodeURIComponent(nextPath)}`} className="btn btn-secondary">
@@ -61,7 +61,7 @@ export default async function SignupPage({
       >
         <div className="section-head">
           <h2 className="section-title">회원가입</h2>
-          <p className="muted">개인 서고와 학습 기록을 만들 새 계정을 등록합니다.</p>
+          <p className="muted">학습 기록을 만들 새 계정을 등록합니다.</p>
         </div>
         <form className="stack" style={{ gap: "var(--space-4)", marginTop: "var(--space-5)" }}>
           <input type="hidden" name="auth_path" value="/signup" />

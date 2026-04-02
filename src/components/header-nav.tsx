@@ -31,17 +31,25 @@ export function HeaderNav() {
     selectedDiscipline && selectedProfile?.stages?.length
       ? (selectedStage ?? selectedProfile.stages[0]?.level ?? null)
       : null;
-  const utilityItems: UtilityItem[] = [
-    { href: "/", label: "Canvas" },
-    { href: "/guide", label: "Guide" },
-    { href: "/library", label: "Library" },
-    { href: "/admin", label: "Admin" },
-    { href: "/auth", label: appUser ? "Account" : "Sign In" },
-  ];
+  const isAdminPage = pathname.startsWith("/admin");
+  const utilityItems: UtilityItem[] = isAdminPage
+    ? [
+        { href: "/admin", label: "Dashboard" },
+        { href: "/admin/topics", label: "Topics" },
+        { href: "/admin/review-queue", label: "Review" },
+        { href: "/admin/users", label: "Users" },
+        { href: "/", label: "Exit Admin" },
+      ]
+    : [
+        { href: "/", label: "Canvas" },
+        { href: "/guide", label: "Guide" },
+        { href: "/admin", label: "Admin" },
+        { href: appUser ? "/" : "/auth", label: appUser ? "Home" : "Sign In" },
+      ];
 
   return (
-    <nav className="explorer-shell" aria-label="Discipline Explorer">
-      <div className="explorer-topbar">
+    <nav className="explorer-shell" aria-label={isAdminPage ? "Admin Navigation" : "Discipline Explorer"}>
+      <div className="explorer-topbar" style={isAdminPage ? { display: "flex", flexDirection: "column", gap: "2px" } : undefined}>
         {utilityItems.map((item) => {
           const active = isActivePath(pathname, item.href);
 
@@ -49,8 +57,9 @@ export function HeaderNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`explorer-tool ${active ? "active" : ""}`}
+              className={`explorer-tool ${active ? "active" : ""} ${isAdminPage ? "explorer-tool--admin" : ""}`}
               aria-current={active ? "page" : undefined}
+              style={isAdminPage ? { justifyContent: "flex-start", paddingLeft: "var(--space-4)", width: "100%" } : undefined}
             >
               {item.label}
             </Link>
@@ -58,112 +67,103 @@ export function HeaderNav() {
         })}
       </div>
 
-      <section className="explorer-account">
-        <span className="explorer-account__eyebrow">
-          {appUser ? "학습 계정" : "메인 사용자 인증"}
-        </span>
-        <strong className="explorer-account__name">
-          {appUser ? `${appUser.displayName}님 환영합니다` : "로그인해서 개인 서고를 시작하세요"}
-        </strong>
-        <p className="explorer-account__copy">
-          {appUser
-            ? "메인 학습 기록과 서고 흐름을 이 계정 기준으로 이어서 사용할 수 있습니다."
-            : "어드민 로그인과 별개로, 일반 사용자는 여기서 로그인해 메인 서비스를 사용합니다."}
-        </p>
-        <div className="explorer-account__actions">
-          <Link
-            href={appUser ? "/library" : "/auth?next=/library"}
-            className="explorer-account__primary"
-          >
-            {appUser ? "내 서고 열기" : "로그인"}
-          </Link>
-          <Link
-            href={appUser ? "/auth" : "/signup?next=/library"}
-            className="explorer-account__secondary"
-          >
-            {appUser ? "계정 관리" : "회원가입"}
-          </Link>
-        </div>
-      </section>
+      {!isAdminPage && (
+        <>
+          <section className="explorer-account" style={{ padding: "var(--space-4)", gap: "var(--space-3)" }}>
+            <strong className="explorer-account__name">
+              {appUser ? appUser.displayName : "사용자 인증"}
+            </strong>
+            <div className="explorer-account__actions">
+              {appUser ? (
+                <Link href="/" className="explorer-account__primary">
+                  탐색 계속
+                </Link>
+              ) : (
+                <>
+                  <Link href="/auth?next=/" className="explorer-account__primary">
+                    로그인
+                  </Link>
+                  <Link href="/signup?next=/" className="explorer-account__secondary">
+                    회원가입
+                  </Link>
+                </>
+              )}
+            </div>
+          </section>
 
-      <div className="explorer-section">
-        <div className="explorer-section__meta">
-          <span className="explorer-section__eyebrow">탐색기</span>
-          <strong className="explorer-section__workspace">STUDY</strong>
-        </div>
+          <div className="explorer-section">
+            <div className="explorer-tree" style={{ marginTop: "var(--space-4)" }}>
+              {disciplineBranches.map((branch) => (
+                <details key={branch.id} className="explorer-branch" open>
+                  <summary className="explorer-branch__summary">{branch.label}</summary>
+                  <div className="explorer-branch__children">
+                    {branch.disciplines.map((discipline) => {
+                      const disciplineProfile = getDisciplineProfile(discipline);
+                      const hasStages = Boolean(disciplineProfile.stages?.length);
 
-        <div className="explorer-root">학문</div>
+                      if (!hasStages) {
+                        return (
+                          <Link
+                            key={discipline}
+                            href={`/?discipline=${encodeURIComponent(discipline)}`}
+                            className={`explorer-leaf ${selectedDiscipline === discipline ? "active" : ""}`}
+                          >
+                            {discipline}
+                          </Link>
+                        );
+                      }
 
-        <div className="explorer-tree">
-          {disciplineBranches.map((branch) => (
-            <details key={branch.id} className="explorer-branch" open>
-              <summary className="explorer-branch__summary">{branch.label}</summary>
-              <div className="explorer-branch__children">
-                {branch.disciplines.map((discipline) => {
-                  const disciplineProfile = getDisciplineProfile(discipline);
-                  const hasStages = Boolean(disciplineProfile.stages?.length);
+                      return (
+                        <div key={discipline} className="explorer-node-group">
+                          <Link
+                            href={`/?discipline=${encodeURIComponent(discipline)}`}
+                            className={`explorer-leaf ${selectedDiscipline === discipline ? "active" : ""}`}
+                          >
+                            {discipline}
+                          </Link>
 
-                  if (!hasStages) {
-                    return (
-                      <Link
-                        key={discipline}
-                        href={`/?discipline=${encodeURIComponent(discipline)}`}
-                        className={`explorer-leaf ${selectedDiscipline === discipline ? "active" : ""}`}
-                      >
-                        {discipline}
-                      </Link>
-                    );
-                  }
+                          {selectedDiscipline === discipline ? (
+                            <div className="explorer-subtree">
+                              {(disciplineProfile.stages ?? []).map((stage) => (
+                                <div key={stage.level} className="explorer-stage">
+                                  <Link
+                                    href={`/?discipline=${encodeURIComponent(discipline)}&stage=${encodeURIComponent(stage.level)}`}
+                                    className={`explorer-stage__link ${activeStage === stage.level ? "active" : ""}`}
+                                  >
+                                    {stage.level}
+                                  </Link>
 
-                  return (
-                    <div key={discipline} className="explorer-node-group">
-                      <Link
-                        href={`/?discipline=${encodeURIComponent(discipline)}`}
-                        className={`explorer-leaf ${selectedDiscipline === discipline ? "active" : ""}`}
-                      >
-                        {discipline}
-                      </Link>
-
-                      {selectedDiscipline === discipline ? (
-                        <div className="explorer-subtree">
-                          {(disciplineProfile.stages ?? []).map((stage) => (
-                            <div key={stage.level} className="explorer-stage">
-                              <Link
-                                href={`/?discipline=${encodeURIComponent(discipline)}&stage=${encodeURIComponent(stage.level)}`}
-                                className={`explorer-stage__link ${activeStage === stage.level ? "active" : ""}`}
-                              >
-                                {stage.level}
-                              </Link>
-
-                              {activeStage === stage.level ? (
-                                <div className="explorer-topic-list">
-                                  {stage.topics.length ? (
-                                    stage.topics.map((topic) => (
-                                      <Link
-                                        key={topic}
-                                        href={`/?discipline=${encodeURIComponent(discipline)}&stage=${encodeURIComponent(stage.level)}&topic=${encodeURIComponent(topic)}`}
-                                        className={`explorer-leaf explorer-leaf--topic ${selectedTopic === topic ? "active" : ""}`}
-                                      >
-                                        {topic}
-                                      </Link>
-                                    ))
-                                  ) : (
-                                    <span className="explorer-note">세부 주제 설계 예정</span>
-                                  )}
+                                  {activeStage === stage.level ? (
+                                    <div className="explorer-topic-list">
+                                      {stage.topics.length ? (
+                                        stage.topics.map((topic) => (
+                                          <Link
+                                            key={topic}
+                                            href={`/?discipline=${encodeURIComponent(discipline)}&stage=${encodeURIComponent(stage.level)}&topic=${encodeURIComponent(topic)}`}
+                                            className={`explorer-leaf explorer-leaf--topic ${selectedTopic === topic ? "active" : ""}`}
+                                          >
+                                            {topic}
+                                          </Link>
+                                        ))
+                                      ) : (
+                                        <span className="explorer-note">세부 주제 설계 예정</span>
+                                      )}
+                                    </div>
+                                  ) : null}
                                 </div>
-                              ) : null}
+                              ))}
                             </div>
-                          ))}
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
-          ))}
-        </div>
-      </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </nav>
   );
 }

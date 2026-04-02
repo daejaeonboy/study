@@ -94,8 +94,6 @@ type AssistantMessage = {
   tone?: "default" | "pending" | "error";
 };
 
-type SidebarPanel = "browse" | "settings";
-
 type AiIntegrationSettings = {
   enabled: boolean;
   provider: "openai" | "gemini" | "grok" | "custom";
@@ -165,10 +163,6 @@ const DEFAULT_AI_SETTINGS: AiIntegrationSettings = {
   systemPrompt:
     "당신은 친절한 학술 학습 도우미입니다. 한국어로 명확하고 직접적인 답변을 제공하세요.",
 };
-
-function isDocumentTab(tab: WorkspaceTab): tab is Extract<WorkspaceTab, { kind: "document" }> {
-  return tab.kind === "document";
-}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -766,17 +760,19 @@ export function HomeView() {
       const next = { ...current, [key]: value };
 
       if (key === "provider") {
-        if (value === "openai") {
+        const nextProvider = value as AiIntegrationSettings["provider"];
+
+        if (nextProvider === "openai") {
           next.apiUrl = "https://api.openai.com/v1/chat/completions";
-        } else if (value === "gemini") {
+        } else if (nextProvider === "gemini") {
           next.apiUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-        } else if (value === "grok") {
+        } else if (nextProvider === "grok") {
           next.apiUrl = "https://api.x.ai/v1/chat/completions";
         }
 
-        next.model = isSupportedAiModel(value, current.model)
+        next.model = isSupportedAiModel(nextProvider, current.model)
           ? current.model
-          : getDefaultModelForProvider(value);
+          : getDefaultModelForProvider(nextProvider);
       }
 
       return next;
@@ -1210,19 +1206,20 @@ export function HomeView() {
             </div>
 
             <div className="knowledge-tabbar__actions">
-              <Link
-                href={appUser ? "/library" : "/auth?next=/"}
-                className={`knowledge-tabbar__user-btn ${appUser ? "is-authenticated" : ""}`}
-              >
-                {appUser ? (
-                  <>
-                    <span className="knowledge-tabbar__user-name">{appUser.displayName}</span>
-                    <span className="knowledge-tabbar__user-badge">내 서고</span>
-                  </>
-                ) : (
-                  "로그인"
-                )}
-              </Link>
+              {appUser ? (
+                <button
+                  type="button"
+                  className="knowledge-tabbar__user-btn is-authenticated"
+                  onClick={handleOpenSettings}
+                >
+                  <span className="knowledge-tabbar__user-name">{appUser.displayName}</span>
+                  <span className="knowledge-tabbar__user-badge">설정</span>
+                </button>
+              ) : (
+                <Link href="/auth?next=/" className="knowledge-tabbar__user-btn">
+                  로그인
+                </Link>
+              )}
               {isAssistantSidebarCollapsed ? (
                 <button
                   type="button"

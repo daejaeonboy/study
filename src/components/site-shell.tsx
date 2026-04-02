@@ -36,7 +36,7 @@ const sections: Array<{ test: (pathname: string) => boolean; meta: SectionMeta }
       hint: "오늘 다시 열어야 할 시작 노트와 연결된 기록을 확인합니다.",
       fileName: "start-note.md",
       outline: ["오늘의 시작 노트", "최근 열람 기록", "연결된 노트", "탐색 태그"],
-      links: ["주제 탐구로 이동", "서고에서 저장 노트 확인", "작업실에서 기록 이어쓰기"],
+      links: ["주제 탐구로 이동", "저장한 기록 확인", "작업실에서 기록 이어쓰기"],
     },
   },
   {
@@ -46,7 +46,7 @@ const sections: Array<{ test: (pathname: string) => boolean; meta: SectionMeta }
       hint: "한 문서를 길게 읽고, 핵심 개념과 다음 탐구로 이어지는 읽기 뷰입니다.",
       fileName: "topic-note.md",
       outline: ["요약", "핵심 본문", "주요 개념", "자가 검토", "다음 탐구"],
-      links: ["여정 보기", "서고에 보관", "연관 주제로 확장"],
+      links: ["여정 보기", "기록에 보관", "연관 주제로 확장"],
     },
   },
   {
@@ -57,16 +57,6 @@ const sections: Array<{ test: (pathname: string) => boolean; meta: SectionMeta }
       fileName: "path-map.md",
       outline: ["시작점", "현재 위치", "탐구의 궤적", "추천 전환"],
       links: ["핵심 주제로 되돌아가기", "다음 단계 열기", "관련 주제 저장"],
-    },
-  },
-  {
-    test: (pathname) => pathname.startsWith("/library"),
-    meta: {
-      title: "서고",
-      hint: "복습할 노트, 저장한 주제, 최근 기록이 축적되는 개인 vault입니다.",
-      fileName: "vault-index.md",
-      outline: ["복습 큐", "최근 탐구", "보관된 주제", "마스터 아카이브"],
-      links: ["최근 노트 다시 열기", "보관 주제 정리", "작업실로 보내기"],
     },
   },
   {
@@ -297,7 +287,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
     ? { width: `${homeSidebarWidths.right}px` }
     : undefined;
 
-  if (isCanvasHome || isStandaloneAuthPage) {
+  if (isCanvasHome || isStandaloneAuthPage || isAdminPage) {
     return <>{children}</>;
   }
 
@@ -307,7 +297,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
         hideContextSidebar ? "page-shell--single-pane" : ""
       }`}
     >
-      <aside className="vault-sidebar" style={homeLeftSidebarStyle}>
+      <aside className={`vault-sidebar ${isAdminPage ? "vault-sidebar--admin" : ""}`} style={homeLeftSidebarStyle}>
         {isCanvasHome ? (
           <div
             className="sidebar-resizer sidebar-resizer--right"
@@ -322,45 +312,26 @@ export function SiteShell({ children }: { children: ReactNode }) {
           <Link href="/" className="vault-brand">
             <span className="vault-brand__mark">IK</span>
             <span className="vault-brand__text">
-              <strong>지식 서고</strong>
-              <small>linked learning workspace</small>
+              <strong>{isAdminPage ? "운영 콘솔" : "지식 공간"}</strong>
+              <small>{isAdminPage ? "admin workspace" : "linked learning workspace"}</small>
             </span>
           </Link>
-
-          {isCanvasHome ? null : (
-            <section className="vault-panel">
-              <span className="vault-panel__eyebrow">현재 문맥</span>
-              <strong className="vault-panel__title">{currentSection.title}</strong>
-              <p className="vault-panel__hint">{currentSection.hint}</p>
-            </section>
-          )}
         </div>
 
         <Suspense fallback={<div className="explorer-shell" />}>
           <HeaderNav />
         </Suspense>
-
-        {isCanvasHome ? null : (
-          <section className="vault-panel" style={{ marginTop: "auto" }}>
-            <span className="vault-panel__eyebrow">고정 메모</span>
-            <ul className="vault-mini-list">
-              <li>하나의 노트에서 시작하기</li>
-              <li>연결을 따라 다음 질문 찾기</li>
-              <li>읽은 내용은 서고에 남기기</li>
-            </ul>
-          </section>
-        )}
       </aside>
 
       <main className="main-canvas">
         {isCanvasHome ? null : (
           <header className="canvas-header">
             <div className="canvas-breadcrumb" aria-label="문서 경로">
-              <span>vault</span>
+              <span>{isAdminPage ? "admin" : "vault"}</span>
               <span>/</span>
               <span>{currentSection.title}</span>
             </div>
-            <span className="canvas-tab">{currentSection.fileName}</span>
+            <span className="canvas-tab">{isAdminPage ? "console" : currentSection.fileName}</span>
           </header>
         )}
         <div className="canvas-content">{children}</div>

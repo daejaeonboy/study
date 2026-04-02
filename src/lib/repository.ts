@@ -6,6 +6,7 @@ import {
   workspaces,
 } from "@/lib/data/seed";
 import type {
+  AdminTopicSummary,
   GuidePreset,
   GuideRecommendation,
   LearningPath,
@@ -45,12 +46,64 @@ type SupabaseBundleRevisionRow = {
   last_reviewed_at?: string | null;
 };
 
+type SupabaseTopicSummaryRow = {
+  slug?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  category?: string | null;
+  tags?: unknown;
+  verification_status?: VerificationStatus | null;
+  revision?: number | null;
+  imported_at?: string | null;
+  last_reviewed_at?: string | null;
+  editorial_summary?: string | null;
+};
+
 function normalizeTopicTags(tags: unknown): string[] {
   if (Array.isArray(tags)) {
     return tags.filter((tag): tag is string => typeof tag === "string");
   }
 
   return [];
+}
+
+function mapBundleToSummary(bundle: TopicBundle): AdminTopicSummary {
+  return {
+    slug: bundle.topic.slug,
+    title: bundle.topic.title,
+    summary: bundle.topic.summary,
+    category: bundle.topic.category,
+    tags: bundle.topic.tags,
+    verificationStatus: bundle.review.verificationStatus,
+    revision: bundle.review.revision,
+    importedAt: bundle.review.importedAt,
+    lastReviewedAt: bundle.review.lastReviewedAt,
+    editorialSummary: bundle.review.editorialSummary,
+  };
+}
+
+function mapTopicRowToSummary(row: SupabaseTopicSummaryRow): AdminTopicSummary | null {
+  if (
+    typeof row.slug !== "string" ||
+    typeof row.title !== "string" ||
+    typeof row.summary !== "string" ||
+    typeof row.category !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    slug: row.slug,
+    title: row.title,
+    summary: row.summary,
+    category: row.category,
+    tags: normalizeTopicTags(row.tags),
+    verificationStatus: row.verification_status ?? undefined,
+    revision: row.revision ?? undefined,
+    importedAt: row.imported_at ?? undefined,
+    lastReviewedAt: row.last_reviewed_at ?? undefined,
+    editorialSummary: row.editorial_summary?.trim() || undefined,
+  };
 }
 
 function getSupabaseReadClient() {
@@ -63,6 +116,15 @@ function getSupabaseReadClient() {
   }
 
   return null;
+}
+
+function getSeedTopicBundleBySlug(slug: string) {
+  return topicBundles.find((bundle) => bundle.topic.slug === slug) ?? null;
+}
+
+function getSeedTopicSummaryBySlug(slug: string) {
+  const bundle = getSeedTopicBundleBySlug(slug);
+  return bundle ? mapBundleToSummary(bundle) : null;
 }
 
 function normalizeTopicBundle(payload: unknown): TopicBundle | null {
@@ -174,6 +236,51 @@ function mergeRemoteBundles(
   return Array.from(bundleMap.values());
 }
 
+async function getTopicBundleBySlugFromSupabase(slug: string): Promise<TopicBundle | null> {
+  const supabase = getSupabaseReadClient();
+
+  if (!supabase) {
+    return getSeedTopicBundleBySlug(slug);
+  }
+
+  const [topicResult, revisionResult] = await Promise.all([
+    supabase
+      .from("topics")
+      .select(
+        "slug, title, summary, importance_reason, category, tags, verification_status, source_origin, revision, imported_at, last_reviewed_at, editorial_summary",
+      )
+      .eq("slug", slug)
+      .maybeSingle(),
+    supabase
+      .from("topic_bundle_revisions")
+      .select(
+        "topic_slug, revision, verification_status, source_origin, editorial_summary, bundle_payload, imported_at, last_reviewed_at",
+      )
+      .eq("topic_slug", slug)
+      .order("revision", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const topicRow = topicResult.data as SupabaseTopicRow | null;
+  const revisionRow = revisionResult.data as SupabaseBundleRevisionRow | null;
+  const seedBundle = getSeedTopicBundleBySlug(slug);
+  const parsedBundle = revisionRow ? normalizeTopicBundle(revisionRow.bundle_payload) : null;
+  const baseBundle = parsedBundle ?? seedBundle;
+
+  if (!baseBundle) {
+    return null;
+  }
+
+  let nextBundle = revisionRow && parsedBundle ? mergeRevisionRowIntoBundle(parsedBundle, revisionRow) : baseBundle;
+
+  if (topicRow) {
+    nextBundle = mergeTopicRowIntoBundle(nextBundle, topicRow);
+  }
+
+  return nextBundle;
+}
+
 export async function getTopicBundles(): Promise<TopicBundle[]> {
   const supabase = getSupabaseReadClient();
 
@@ -214,8 +321,51 @@ export async function getTopics(): Promise<Topic[]> {
 }
 
 export async function getTopicBySlug(slug: string): Promise<Topic | null> {
-  const allTopics = await getTopics();
-  return allTopics.find((topic) => topic.slug === slug) ?? null;
+  const bundle = await getTopicBundleBySlugFromSupabase(slug);
+  return bundle ? materializeTopic(bundle) : null;
+}
+
+export async function getTopicSummaryBySlug(slug: string): Promise<AdminTopicSummary | null> {
+  const supabase = getSupabaseReadClient();
+
+  if (!supabase) {
+    return getSeedTopicSummaryBySlug(slug);
+  }
+
+  const { data, error } = await supabase
+    .from("topics")
+    .select("slug, title, summary, category, tags, verification_status, revision, imported_at, last_reviewed_at, editorial_summary")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error || !data) {
+    return getSeedTopicSummaryBySlug(slug);
+  }
+
+  return mapTopicRowToSummary(data as SupabaseTopicSummaryRow);
+}
+
+export async function getTopicSummaries(): Promise<AdminTopicSummary[]> {
+  const supabase = getSupabaseReadClient();
+
+  if (!supabase) {
+    return topicBundles.map(mapBundleToSummary);
+  }
+
+  const { data, error } = await supabase
+    .from("topics")
+    .select(
+      "slug, title, summary, category, tags, verification_status, revision, imported_at, last_reviewed_at, editorial_summary",
+    )
+    .order("title", { ascending: true });
+
+  if (error || !data?.length) {
+    return topicBundles.map(mapBundleToSummary);
+  }
+
+  return (data as SupabaseTopicSummaryRow[])
+    .map(mapTopicRowToSummary)
+    .filter((item): item is AdminTopicSummary => Boolean(item));
 }
 
 export async function getFeaturedTopics(): Promise<Topic[]> {

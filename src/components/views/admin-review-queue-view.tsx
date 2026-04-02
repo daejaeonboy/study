@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import type { AdminTopicRecord, EditorialUser, TopicReviewTask } from "@/lib/domain";
+import { AdminReviewActions } from "@/components/admin/admin-review-actions";
+import type { AdminTopicSummaryRecord, EditorialUser, TopicReviewTask } from "@/lib/domain";
 import { formatReviewTaskStatus } from "@/lib/utils";
 
 function formatTimestamp(value?: string) {
@@ -21,96 +22,88 @@ function formatTimestamp(value?: string) {
 }
 
 export function AdminReviewQueueView({
+  currentUser,
   tasks,
   records,
   users,
 }: {
+  currentUser: EditorialUser;
   tasks: TopicReviewTask[];
-  records: AdminTopicRecord[];
+  records: AdminTopicSummaryRecord[];
   users: EditorialUser[];
 }) {
   const recordMap = new Map(records.map((record) => [record.topic.slug, record]));
   const userMap = new Map(users.map((user) => [user.id, user]));
 
   return (
-    <section className="view">
-      <header className="stack" style={{ gap: "var(--space-6)" }}>
-        <div className="stack" style={{ gap: "var(--space-4)" }}>
-          <span className="caption" style={{ color: "var(--accent)" }}>
-            REVIEW QUEUE
-          </span>
-          <h1 className="hero-title">검수 큐</h1>
-          <p className="hero-copy" style={{ maxWidth: "880px" }}>
-            승인 전 상태의 검수 요청을 모아 보는 화면입니다. 어떤 Topic이 누구에게 요청되었고,
-            어떤 코멘트가 달려 있는지 한 번에 확인할 수 있습니다.
-          </p>
+    <section className="admin-page">
+      <header className="admin-page__header">
+        <div className="stack" style={{ gap: "6px" }}>
+          <h1 className="admin-page__title">검수</h1>
+          <p className="caption">{tasks.length}개 대기 중</p>
         </div>
       </header>
 
-      <div className="stack" style={{ gap: "var(--space-4)", marginTop: "var(--space-8)" }}>
-        {tasks.map((task) => {
-          const record = recordMap.get(task.topicSlug);
-          const requester = userMap.get(task.requesterId);
-          const reviewer = task.reviewerId ? userMap.get(task.reviewerId) : undefined;
-
-          return (
-            <article
-              key={task.id}
-              className="surface card-interactive"
-              style={{ padding: "var(--space-6)" }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  gap: "var(--space-4)",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div className="stack" style={{ gap: "var(--space-2)", maxWidth: "720px" }}>
-                  <div className="chip-row">
-                    <span className="chip chip--alt">{record?.topic.category ?? "미분류"}</span>
-                    <span className="chip">{formatReviewTaskStatus(task.status)}</span>
-                  </div>
-                  <strong style={{ fontSize: "1.1rem", color: "var(--text-strong)" }}>
-                    {record?.topic.title ?? task.topicSlug}
-                  </strong>
-                  <p className="muted">{task.comment ?? "추가 코멘트 없음"}</p>
-                </div>
-
-                <div className="stack" style={{ gap: "var(--space-2)", minWidth: "260px" }}>
-                  <span className="caption">
-                    요청자 {requester?.displayName ?? task.requesterId}
-                  </span>
-                  <span className="caption">
-                    검수자 {reviewer?.displayName ?? "미지정"}
-                  </span>
-                  <span className="caption">요청 시각 {formatTimestamp(task.requestedAt)}</span>
-                  <span className="caption">처리 시각 {formatTimestamp(task.reviewedAt)}</span>
-                  <div className="hero-actions">
-                    <Link href={`/admin/topics/${task.topicSlug}`} className="btn btn-secondary">
-                      운영 상세
-                    </Link>
-                    <Link
-                      href={`/admin/topics/${encodeURIComponent(task.topicSlug)}/edit`}
-                      className="btn btn-primary"
-                    >
-                      Topic 편집
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-
-        {!tasks.length ? (
-          <div className="surface" style={{ padding: "var(--space-10)", textAlign: "center" }}>
-            <p className="muted">열린 검수 작업이 없습니다.</p>
+      <section className="admin-section">
+        <div className="admin-table admin-table--review">
+          <div className="admin-table__head">
+            <span>Topic</span>
+            <span>요청</span>
+            <span>상태</span>
+            <span>시간</span>
+            <span>액션</span>
           </div>
-        ) : null}
-      </div>
+
+          {tasks.length ? (
+            tasks.map((task) => {
+              const record = recordMap.get(task.topicSlug);
+              const requester = userMap.get(task.requesterId);
+              const reviewer = task.reviewerId ? userMap.get(task.reviewerId) : undefined;
+
+              return (
+                <article key={task.id} className="admin-table__row">
+                  <div className="admin-table__topic">
+                    <strong>{record?.topic.title ?? task.topicSlug}</strong>
+                    <span>{record?.topic.slug ?? task.topicSlug}</span>
+                    {task.comment ? <p>{task.comment}</p> : null}
+                  </div>
+
+                  <div className="admin-table__cell">
+                    <strong>{requester?.displayName ?? task.requesterId}</strong>
+                    <span>{reviewer?.displayName ?? "검수자 미지정"}</span>
+                  </div>
+
+                  <div className="admin-table__cell">
+                    <strong>{formatReviewTaskStatus(task.status)}</strong>
+                    <span>{record?.assignee?.displayName ?? "미할당"}</span>
+                  </div>
+
+                  <div className="admin-table__cell">
+                    <strong>{formatTimestamp(task.requestedAt)}</strong>
+                    <span>{task.reviewedAt ? formatTimestamp(task.reviewedAt) : "검토 전"}</span>
+                  </div>
+
+                  <div className="admin-table__actions">
+                    <AdminReviewActions
+                      topicSlug={task.topicSlug}
+                      currentStatus={task.status}
+                      currentUserRole={currentUser.role}
+                    />
+                    <Link href={`/admin/topics/${task.topicSlug}`} className="btn btn-secondary btn-sm">
+                      상세
+                    </Link>
+                    <Link href={`/admin/topics/${task.topicSlug}/edit`} className="btn btn-primary btn-sm">
+                      편집
+                    </Link>
+                  </div>
+                </article>
+              );
+            })
+          ) : (
+            <div className="admin-empty">열린 검수 작업이 없습니다.</div>
+          )}
+        </div>
+      </section>
     </section>
   );
 }

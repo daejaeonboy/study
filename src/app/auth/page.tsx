@@ -12,7 +12,7 @@ export default async function AuthPage({
 }) {
   const { message, next } = await searchParams;
   const appUser = await getSessionAppUser();
-  const nextPath = next?.trim() || "/library";
+  const nextPath = next?.trim() || "/";
 
   if (appUser) {
     redirect(nextPath);
@@ -27,7 +27,7 @@ export default async function AuthPage({
           </Link>
           <h1 className="auth-card__title">메인 서비스 로그인</h1>
           <p className="auth-card__description">
-            학습 기록과 개인 서고를 이어서 사용하려면<br />
+            학습 기록과 설정을 이어서 사용하려면<br />
             일반 사용자 계정으로 로그인하세요.
           </p>
         </header>

@@ -223,8 +223,8 @@ function TopicEditorForm({
           </h1>
           <p className="muted" style={{ maxWidth: "720px" }}>
             {editorContext === "topic-edit"
-              ? "운영 상세에서 바로 이어지는 단일 Topic 편집 화면입니다. 로컬 임시 저장과 Supabase 공유 저장을 분리해서 안전하게 운영할 수 있습니다."
-              : "전체 원본을 먼저 적재한 뒤, 운영자가 필요한 Topic만 후속 편집하는 흐름입니다. 브라우저 임시 저장 후, 필요할 때만 Supabase 공유 저장으로 올릴 수 있습니다."}
+              ? "Topic 편집"
+              : "Topic 작업실"}
           </p>
         </div>
 
@@ -589,8 +589,8 @@ export function EditorialWorkspaceView({
     ? `${selectedTopic?.title ?? "Topic"} 편집`
     : "학문 데이터 운영 작업실";
   const headerCopy = isTopicEditMode
-    ? "운영 상세에서 바로 이어지는 Topic 편집 화면입니다. 브라우저 임시 저장과 Supabase 공유 저장을 모두 여기서 처리합니다."
-    : "전체 원본을 먼저 적재한 뒤, 운영자가 필요한 Topic만 골라 후속 검토하고 수정하는 화면입니다. 브라우저 임시 저장과 Supabase 공유 저장을 분리해서 운영합니다.";
+    ? "Topic 편집"
+    : "Topic 작업실";
 
   return (
     <section className="view" style={{ paddingBottom: "var(--space-24)" }}>

@@ -1,5 +1,6 @@
 import type {
   AdminTopicRecord,
+  AdminTopicSummaryRecord,
   EditorialRole,
   EditorialUser,
   ReviewTaskStatus,
@@ -7,7 +8,7 @@ import type {
   TopicReviewTask,
 } from "@/lib/domain";
 import { currentEditorialUserId, editorialUsers, topicAssignments, topicReviewTasks } from "@/lib/editorial-seed";
-import { getTopics } from "@/lib/repository";
+import { getTopicBySlug, getTopicSummaryBySlug, getTopicSummaries, getTopics } from "@/lib/repository";
 import { createSupabaseClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { createSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/supabase/server";
 
@@ -109,6 +110,69 @@ function normalizeReviewTasks(rows: SupabaseReviewTaskRow[]): TopicReviewTask[] 
   }, []);
 }
 
+function buildUserMap(users: EditorialUser[]) {
+  return new Map(users.map((user) => [user.id, user]));
+}
+
+function buildAssignmentMap(assignments: TopicAssignment[]) {
+  return new Map(assignments.map((assignment) => [assignment.topicSlug, assignment]));
+}
+
+function buildLatestReviewTaskMap(reviewTasks: TopicReviewTask[]) {
+  const latestReviewTaskMap = new Map<string, TopicReviewTask>();
+
+  reviewTasks.forEach((task) => {
+    const current = latestReviewTaskMap.get(task.topicSlug);
+
+    if (!current || current.requestedAt < task.requestedAt) {
+      latestReviewTaskMap.set(task.topicSlug, task);
+    }
+  });
+
+  return latestReviewTaskMap;
+}
+
+async function getAssignmentByTopicSlug(topicSlug: string): Promise<TopicAssignment | null> {
+  const supabase = getSupabaseReadClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("topic_assignments")
+      .select("topic_slug, assignee_id, assigned_by_id, assigned_at, note")
+      .eq("topic_slug", topicSlug)
+      .maybeSingle();
+
+    if (!error && data) {
+      const assignment = normalizeAssignments([data as SupabaseAssignmentRow])[0];
+      return assignment ?? null;
+    }
+  }
+
+  return (await getTopicAssignments()).find((assignment) => assignment.topicSlug === topicSlug) ?? null;
+}
+
+async function getLatestReviewTaskByTopicSlug(topicSlug: string): Promise<TopicReviewTask | null> {
+  const supabase = getSupabaseReadClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("topic_review_tasks")
+      .select("id, topic_slug, status, requester_id, reviewer_id, requested_at, reviewed_at, comment")
+      .eq("topic_slug", topicSlug)
+      .order("requested_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data) {
+      const task = normalizeReviewTasks([data as SupabaseReviewTaskRow])[0];
+      return task ?? null;
+    }
+  }
+
+  const reviewTasks = await getTopicReviewTasks();
+  return reviewTasks.find((task) => task.topicSlug === topicSlug) ?? null;
+}
+
 function getSupabaseReadClient() {
   if (hasSupabaseAdminConfig()) {
     return createSupabaseAdminClient();
@@ -185,6 +249,62 @@ export async function getTopicReviewTasks(): Promise<TopicReviewTask[]> {
   return topicReviewTasks;
 }
 
+function buildAdminTopicRecord<TTopic extends { slug: string }>(
+  topic: TTopic,
+  userMap: Map<string, EditorialUser>,
+  assignmentMap: Map<string, TopicAssignment>,
+  latestReviewTaskMap: Map<string, TopicReviewTask>,
+) {
+  const assignment = assignmentMap.get(topic.slug);
+  const latestReviewTask = latestReviewTaskMap.get(topic.slug);
+
+  return {
+    topic,
+    assignment,
+    assignee: assignment ? userMap.get(assignment.assigneeId) : undefined,
+    assignedBy: assignment ? userMap.get(assignment.assignedById) : undefined,
+    latestReviewTask,
+  };
+}
+
+export async function getAdminTopicSummaryRecords(): Promise<AdminTopicSummaryRecord[]> {
+  const [topics, users, assignments, reviewTasks] = await Promise.all([
+    getTopicSummaries(),
+    getEditorialUsers(),
+    getTopicAssignments(),
+    getTopicReviewTasks(),
+  ]);
+
+  const userMap = buildUserMap(users);
+  const assignmentMap = buildAssignmentMap(assignments);
+  const latestReviewTaskMap = buildLatestReviewTaskMap(reviewTasks);
+
+  return topics.map((topic) => buildAdminTopicRecord(topic, userMap, assignmentMap, latestReviewTaskMap));
+}
+
+export async function getAdminTopicSummaryRecordBySlug(slug: string): Promise<AdminTopicSummaryRecord | null> {
+  const [topic, users, assignment, latestReviewTask] = await Promise.all([
+    getTopicSummaryBySlug(slug),
+    getEditorialUsers(),
+    getAssignmentByTopicSlug(slug),
+    getLatestReviewTaskByTopicSlug(slug),
+  ]);
+
+  if (!topic) {
+    return null;
+  }
+
+  const userMap = buildUserMap(users);
+
+  return {
+    topic,
+    assignment: assignment ?? undefined,
+    assignee: assignment ? userMap.get(assignment.assigneeId) : undefined,
+    assignedBy: assignment ? userMap.get(assignment.assignedById) : undefined,
+    latestReviewTask: latestReviewTask ?? undefined,
+  };
+}
+
 export async function getAdminTopicRecords(): Promise<AdminTopicRecord[]> {
   const [topics, users, assignments, reviewTasks] = await Promise.all([
     getTopics(),
@@ -193,35 +313,34 @@ export async function getAdminTopicRecords(): Promise<AdminTopicRecord[]> {
     getTopicReviewTasks(),
   ]);
 
-  const userMap = new Map(users.map((user) => [user.id, user]));
-  const assignmentMap = new Map(assignments.map((assignment) => [assignment.topicSlug, assignment]));
-  const latestReviewTaskMap = new Map<string, TopicReviewTask>();
+  const userMap = buildUserMap(users);
+  const assignmentMap = buildAssignmentMap(assignments);
+  const latestReviewTaskMap = buildLatestReviewTaskMap(reviewTasks);
 
-  reviewTasks.forEach((task) => {
-    const current = latestReviewTaskMap.get(task.topicSlug);
-
-    if (!current || current.requestedAt < task.requestedAt) {
-      latestReviewTaskMap.set(task.topicSlug, task);
-    }
-  });
-
-  return topics.map((topic) => {
-    const assignment = assignmentMap.get(topic.slug);
-    const latestReviewTask = latestReviewTaskMap.get(topic.slug);
-
-    return {
-      topic,
-      assignment,
-      assignee: assignment ? userMap.get(assignment.assigneeId) : undefined,
-      assignedBy: assignment ? userMap.get(assignment.assignedById) : undefined,
-      latestReviewTask,
-    };
-  });
+  return topics.map((topic) => buildAdminTopicRecord(topic, userMap, assignmentMap, latestReviewTaskMap));
 }
 
 export async function getAdminTopicRecordBySlug(slug: string): Promise<AdminTopicRecord | null> {
-  const records = await getAdminTopicRecords();
-  return records.find((record) => record.topic.slug === slug) ?? null;
+  const [topic, users, assignment, latestReviewTask] = await Promise.all([
+    getTopicBySlug(slug),
+    getEditorialUsers(),
+    getAssignmentByTopicSlug(slug),
+    getLatestReviewTaskByTopicSlug(slug),
+  ]);
+
+  if (!topic) {
+    return null;
+  }
+
+  const userMap = buildUserMap(users);
+
+  return {
+    topic,
+    assignment: assignment ?? undefined,
+    assignee: assignment ? userMap.get(assignment.assigneeId) : undefined,
+    assignedBy: assignment ? userMap.get(assignment.assignedById) : undefined,
+    latestReviewTask: latestReviewTask ?? undefined,
+  };
 }
 
 export async function getReviewQueue(): Promise<TopicReviewTask[]> {

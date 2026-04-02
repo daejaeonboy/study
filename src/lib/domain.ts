@@ -113,6 +113,27 @@ export interface TopicReviewTask {
   comment?: string;
 }
 
+export interface AdminTopicSummary {
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  tags: string[];
+  verificationStatus?: VerificationStatus;
+  revision?: number;
+  importedAt?: string;
+  lastReviewedAt?: string;
+  editorialSummary?: string;
+}
+
+export interface AdminTopicSummaryRecord {
+  topic: AdminTopicSummary;
+  assignee?: EditorialUser;
+  assignedBy?: EditorialUser;
+  assignment?: TopicAssignment;
+  latestReviewTask?: TopicReviewTask;
+}
+
 export interface AdminTopicRecord {
   topic: Topic;
   assignee?: EditorialUser;
