@@ -33,7 +33,8 @@ export function AdminTopicControls({
   );
   const [reviewerId, setReviewerId] = useState(record.latestReviewTask?.reviewerId ?? currentUser.id);
   const [reviewComment, setReviewComment] = useState(record.latestReviewTask?.comment ?? "");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [assignmentNotice, setAssignmentNotice] = useState<string | null>(null);
+  const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const [isSavingAssignment, setIsSavingAssignment] = useState(false);
   const [isSavingReview, setIsSavingReview] = useState(false);
   const canAssign = canManageAssignments(currentUser.role);
@@ -45,12 +46,12 @@ export function AdminTopicControls({
 
   async function handleAssignmentSave() {
     if (!assigneeId) {
-      setNotice("담당자를 먼저 선택해야 합니다.");
+      setAssignmentNotice("담당자를 먼저 선택해야 합니다.");
       return;
     }
 
     setIsSavingAssignment(true);
-    setNotice(null);
+    setAssignmentNotice(null);
 
     try {
       const response = await fetch(`/api/admin/topics/${record.topic.slug}/assignment`, {
@@ -69,12 +70,12 @@ export function AdminTopicControls({
         throw new Error(payload?.error ?? "담당자 저장에 실패했습니다.");
       }
 
-      setNotice("담당자 배정을 저장했습니다.");
+      setAssignmentNotice("담당자 배정을 저장했습니다.");
       startTransition(() => {
         router.refresh();
       });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "담당자 저장에 실패했습니다.");
+      setAssignmentNotice(error instanceof Error ? error.message : "담당자 저장에 실패했습니다.");
     } finally {
       setIsSavingAssignment(false);
     }
@@ -82,7 +83,7 @@ export function AdminTopicControls({
 
   async function handleReviewSave() {
     setIsSavingReview(true);
-    setNotice(null);
+    setReviewNotice(null);
 
     try {
       const response = await fetch(`/api/admin/topics/${record.topic.slug}/review`, {
@@ -102,12 +103,12 @@ export function AdminTopicControls({
         throw new Error(payload?.error ?? "검수 상태 저장에 실패했습니다.");
       }
 
-      setNotice("검수 상태를 저장했습니다.");
+      setReviewNotice("검수 상태를 저장했습니다.");
       startTransition(() => {
         router.refresh();
       });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "검수 상태 저장에 실패했습니다.");
+      setReviewNotice(error instanceof Error ? error.message : "검수 상태 저장에 실패했습니다.");
     } finally {
       setIsSavingReview(false);
     }
@@ -159,6 +160,7 @@ export function AdminTopicControls({
           >
             {isSavingAssignment ? "저장 중..." : "담당자 저장"}
           </button>
+          {assignmentNotice ? <span className="caption">{assignmentNotice}</span> : null}
         </div>
 
         <div className="stack" style={{ gap: "var(--space-4)" }}>
@@ -203,9 +205,8 @@ export function AdminTopicControls({
           >
             {isSavingReview ? "저장 중..." : "검수 상태 저장"}
           </button>
+          {reviewNotice ? <span className="caption">{reviewNotice}</span> : null}
         </div>
-
-        {notice ? <span className="caption">{notice}</span> : null}
       </div>
     </section>
   );

@@ -2,6 +2,7 @@ import type { User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
 import type { EditorialRole, EditorialUser } from "@/lib/domain";
+import { getInitialEditorialRole } from "@/lib/editorial-bootstrap";
 import { canEditTopics, canManageAssignments, canManageReviews } from "@/lib/editorial-permissions";
 import { getEditorialUserById, getEditorialUsers } from "@/lib/editorial-repository";
 import { createSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/supabase/server";
@@ -100,7 +101,10 @@ export async function ensureEditorialUserForAuthUser(
     throw countError;
   }
 
-  const role: EditorialRole = (count ?? 0) === 0 ? "admin" : "editor";
+  const role: EditorialRole = getInitialEditorialRole({
+    existingUserCount: count ?? 0,
+    email: authUser.email,
+  });
   const { data, error } = await supabase
     .from("editorial_users")
     .upsert(

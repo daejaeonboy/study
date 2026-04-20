@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AdminTopicDetailView } from "@/components/views/admin-topic-detail-view";
 import { requireEditorialUser } from "@/lib/editorial-auth";
 import { getAdminTopicRecordBySlug, getEditorialUsers } from "@/lib/editorial-repository";
+import { getPracticeQuestionTemplates } from "@/lib/practice-repository";
 import { hasSupabaseAdminConfig } from "@/lib/supabase/server";
 
 export default async function AdminTopicPage({
@@ -12,9 +13,10 @@ export default async function AdminTopicPage({
 }) {
   const { slug } = await params;
   const currentUser = await requireEditorialUser(`/admin/topics/${slug}`);
-  const [record, users] = await Promise.all([
+  const [record, users, practiceTemplates] = await Promise.all([
     getAdminTopicRecordBySlug(slug),
     getEditorialUsers(),
+    getPracticeQuestionTemplates(slug),
   ]);
 
   if (!record) {
@@ -26,6 +28,7 @@ export default async function AdminTopicPage({
       record={record}
       currentUser={currentUser}
       users={users}
+      practiceTemplates={practiceTemplates}
       remotePersistenceEnabled={hasSupabaseAdminConfig()}
     />
   );

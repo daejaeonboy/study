@@ -1,7 +1,9 @@
 import Link from "next/link";
 
+import { AdminPracticeTemplateControls } from "@/components/admin/admin-practice-template-controls";
 import { AdminTopicControls } from "@/components/admin/admin-topic-controls";
 import type { AdminTopicRecord, EditorialUser } from "@/lib/domain";
+import type { PracticeQuestionTemplate } from "@/lib/practice";
 import {
   formatEditorialRole,
   formatReviewTaskStatus,
@@ -29,14 +31,29 @@ export function AdminTopicDetailView({
   record,
   currentUser,
   users,
+  practiceTemplates,
   remotePersistenceEnabled,
 }: {
   record: AdminTopicRecord;
   currentUser: EditorialUser;
   users: EditorialUser[];
+  practiceTemplates: PracticeQuestionTemplate[];
   remotePersistenceEnabled: boolean;
 }) {
   const { topic, assignee, assignedBy, assignment, latestReviewTask } = record;
+  const reviewLabel = latestReviewTask
+    ? formatReviewTaskStatus(latestReviewTask.status)
+    : "검수 요청 없음";
+  const connectionCount = topic.prerequisites.length + topic.related.length + topic.crossDomainLinks.length;
+  const layerBodyCount =
+    topic.layers.light.body.length + topic.layers.core.body.length + topic.layers.deep.body.length;
+  const nextAction = !assignee
+    ? "담당자 배정"
+    : latestReviewTask?.status === "changes_requested"
+      ? "수정 반영"
+      : latestReviewTask?.status === "approved"
+        ? "게시 검토"
+        : "검수 진행";
 
   return (
     <section className="view">
@@ -69,6 +86,25 @@ export function AdminTopicDetailView({
           <Link href="/admin/review-queue" className="btn btn-secondary">
             검수 큐로 이동
           </Link>
+        </div>
+
+        <div className="metrics">
+          <div className="metric">
+            <strong>{assignee?.displayName ?? "미할당"}</strong>
+            <span>담당자</span>
+          </div>
+          <div className="metric">
+            <strong>{reviewLabel}</strong>
+            <span>최근 검수</span>
+          </div>
+          <div className="metric">
+            <strong>{connectionCount}</strong>
+            <span>연결 관계</span>
+          </div>
+          <div className="metric">
+            <strong>{nextAction}</strong>
+            <span>다음 운영 액션</span>
+          </div>
         </div>
       </header>
 
@@ -126,6 +162,10 @@ export function AdminTopicDetailView({
                 <span className="caption">출처 수</span>
                 <strong style={{ display: "block", marginTop: "8px" }}>{topic.sources.length}</strong>
               </div>
+              <div className="surface" style={{ padding: "var(--space-5)", background: "var(--bg-subtle)" }}>
+                <span className="caption">본문 문단</span>
+                <strong style={{ display: "block", marginTop: "8px" }}>{layerBodyCount}</strong>
+              </div>
             </div>
           </article>
         </section>
@@ -146,6 +186,12 @@ export function AdminTopicDetailView({
             record={record}
             currentUser={currentUser}
             users={users}
+            remotePersistenceEnabled={remotePersistenceEnabled}
+          />
+
+          <AdminPracticeTemplateControls
+            topicSlug={topic.slug}
+            templates={practiceTemplates}
             remotePersistenceEnabled={remotePersistenceEnabled}
           />
 

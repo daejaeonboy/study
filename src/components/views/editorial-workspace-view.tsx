@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useDeferredValue, useEffect, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -38,29 +38,111 @@ function parseMultiline(value: string) {
     .filter(Boolean);
 }
 
-function parseCrossDomainLinks(value: string): CrossDomainLink[] {
-  return value
+function parseCrossDomainLinkRows(value: string) {
+  const links: CrossDomainLink[] = [];
+  const ignoredRows: string[] = [];
+
+  value
     .split("\n")
     .map((row) => row.trim())
     .filter(Boolean)
-    .map((row) => {
+    .forEach((row) => {
       const [topicSlug, label, ...reasonParts] = row.split("|").map((item) => item.trim());
 
       if (!topicSlug || !label) {
-        return null;
+        ignoredRows.push(row);
+        return;
       }
 
-      return {
+      links.push({
         topicSlug,
         label,
         reason: reasonParts.join(" | "),
-      };
-    })
-    .filter((item): item is CrossDomainLink => Boolean(item));
+      });
+    });
+
+  return { links, ignoredRows };
 }
 
 function serializeCrossDomainLinks(links: CrossDomainLink[]) {
   return links.map((link) => [link.topicSlug, link.label, link.reason].join(" | ")).join("\n");
+}
+
+function hasChanged(left: unknown, right: unknown) {
+  return JSON.stringify(left) !== JSON.stringify(right);
+}
+
+function getChangedFieldLabels(original: Topic, draft: Topic) {
+  const changes: string[] = [];
+  const scalarFields: Array<[keyof Topic, string]> = [
+    ["verificationStatus", "검토 상태"],
+    ["sourceOrigin", "원본 출처"],
+    ["editorialSummary", "운영 메모"],
+    ["title", "제목"],
+    ["category", "카테고리"],
+    ["summary", "요약"],
+    ["importance", "중요성 메모"],
+  ];
+
+  scalarFields.forEach(([field, label]) => {
+    if ((original[field] ?? "") !== (draft[field] ?? "")) {
+      changes.push(label);
+    }
+  });
+
+  [
+    ["tags", "태그"],
+    ["prerequisites", "선수지식"],
+    ["related", "관련 Topic"],
+    ["crossDomainLinks", "크로스 도메인 링크"],
+    ["sources", "출처"],
+  ].forEach(([field, label]) => {
+    if (hasChanged(original[field as keyof Topic], draft[field as keyof Topic])) {
+      changes.push(label);
+    }
+  });
+
+  layerSequence.forEach((depth) => {
+    if (hasChanged(original.layers[depth], draft.layers[depth])) {
+      changes.push(`${depth.toUpperCase()} Layer`);
+    }
+  });
+
+  return changes;
+}
+
+function validateTopicDraft(topic: Topic, ignoredCrossDomainRows: string[]) {
+  const issues: string[] = [];
+
+  if (!topic.title.trim()) {
+    issues.push("제목이 비어 있습니다.");
+  }
+
+  if (!topic.category.trim()) {
+    issues.push("카테고리가 비어 있습니다.");
+  }
+
+  if (!topic.summary.trim()) {
+    issues.push("요약이 비어 있습니다.");
+  }
+
+  if (!topic.importance.trim()) {
+    issues.push("중요성 메모가 비어 있습니다.");
+  }
+
+  layerSequence.forEach((depth) => {
+    const layer = topic.layers[depth];
+
+    if (!layer.title.trim() || !layer.description.trim() || !layer.body.length) {
+      issues.push(`${depth.toUpperCase()} Layer의 제목, 설명, 본문을 확인해야 합니다.`);
+    }
+  });
+
+  if (ignoredCrossDomainRows.length) {
+    issues.push(`크로스 도메인 링크 ${ignoredCrossDomainRows.length}개 행의 형식이 올바르지 않습니다.`);
+  }
+
+  return issues;
 }
 
 function formatTimestamp(value?: string) {
@@ -99,12 +181,27 @@ function TopicEditorForm({
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState(topic);
+  const [crossDomainText, setCrossDomainText] = useState(() =>
+    serializeCrossDomainLinks(topic.crossDomainLinks),
+  );
   const [notice, setNotice] = useState<string | null>(null);
   const [baseRevision, setBaseRevision] = useState(topic.revision ?? 1);
   const [isRemoteSaving, setIsRemoteSaving] = useState(false);
+  const crossDomainParse = useMemo(
+    () => parseCrossDomainLinkRows(crossDomainText),
+    [crossDomainText],
+  );
+  const ignoredCrossDomainRows = crossDomainParse.ignoredRows;
+  const changedFieldLabels = useMemo(() => getChangedFieldLabels(topic, draft), [topic, draft]);
+  const validationIssues = useMemo(
+    () => validateTopicDraft(draft, ignoredCrossDomainRows),
+    [draft, ignoredCrossDomainRows],
+  );
+  const canSaveDraft = validationIssues.length === 0;
 
   useEffect(() => {
     setDraft(topic);
+    setCrossDomainText(serializeCrossDomainLinks(topic.crossDomainLinks));
     setBaseRevision(topic.revision ?? 1);
   }, [topic]);
 
@@ -140,6 +237,11 @@ function TopicEditorForm({
   }
 
   function handleSave() {
+    if (!canSaveDraft) {
+      setNotice("저장 전에 변경 요약의 확인 필요 항목을 먼저 정리해야 합니다.");
+      return;
+    }
+
     const savedTopic: Topic = buildSavedDraft("local-override");
 
     onSave(savedTopic);
@@ -148,6 +250,11 @@ function TopicEditorForm({
   }
 
   async function handleRemoteSave() {
+    if (!canSaveDraft) {
+      setNotice("Supabase 저장 전에 변경 요약의 확인 필요 항목을 먼저 정리해야 합니다.");
+      return;
+    }
+
     const preparedTopic: Topic = {
       ...draft,
       verificationStatus: draft.verificationStatus ?? "reviewing",
@@ -178,6 +285,13 @@ function TopicEditorForm({
         | null;
 
       if (!response.ok) {
+        if (response.status === 409 && payload?.currentRevision) {
+          setBaseRevision(payload.currentRevision);
+          throw new Error(
+            `Supabase의 최신 리비전 r${payload.currentRevision}과 충돌했습니다. 새로고침 후 다시 저장하세요.`,
+          );
+        }
+
         throw new Error(payload?.error ?? "Supabase 저장에 실패했습니다.");
       }
 
@@ -370,12 +484,22 @@ function TopicEditorForm({
                 <span className="caption">크로스 도메인 링크 (`topicSlug | label | reason`)</span>
                 <textarea
                   className="plain-input"
-                  value={serializeCrossDomainLinks(draft.crossDomainLinks)}
-                  onChange={(event) =>
-                    updateField("crossDomainLinks", parseCrossDomainLinks(event.target.value))
-                  }
+                  value={crossDomainText}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    const nextParse = parseCrossDomainLinkRows(nextValue);
+
+                    setCrossDomainText(nextValue);
+                    updateField("crossDomainLinks", nextParse.links);
+                  }}
                   style={{ minHeight: "144px" }}
                 />
+                {crossDomainParse.ignoredRows.length ? (
+                  <span className="muted" style={{ color: "var(--warning)", fontSize: "0.85rem" }}>
+                    형식이 맞지 않는 행 {crossDomainParse.ignoredRows.length}개가 있습니다. 저장 전
+                    `topicSlug | label | reason` 형식으로 고쳐야 합니다.
+                  </span>
+                ) : null}
               </label>
             </div>
           </div>
@@ -514,18 +638,65 @@ function TopicEditorForm({
             </div>
           </section>
 
+          <section className="surface-elevated" style={{ padding: "var(--space-6)" }}>
+            <div className="section-head">
+              <h2 className="section-title">저장 전 변경 요약</h2>
+            </div>
+            <div className="grid-2" style={{ marginTop: "var(--space-5)" }}>
+              <div className="surface" style={{ padding: "var(--space-5)", background: "var(--bg-subtle)" }}>
+                <span className="caption">변경된 영역</span>
+                <strong style={{ display: "block", marginTop: "8px" }}>
+                  {changedFieldLabels.length ? `${changedFieldLabels.length}개` : "없음"}
+                </strong>
+                <p className="muted" style={{ marginTop: "8px", fontSize: "0.9rem" }}>
+                  {changedFieldLabels.length ? changedFieldLabels.join(", ") : "현재 원본과 동일합니다."}
+                </p>
+              </div>
+              <div
+                className="surface"
+                style={{
+                  padding: "var(--space-5)",
+                  background: validationIssues.length ? "var(--warning-soft)" : "var(--bg-subtle)",
+                  border: validationIssues.length ? "1px solid var(--warning-border)" : "1px solid var(--line)",
+                }}
+              >
+                <span className="caption">확인 필요</span>
+                <strong style={{ display: "block", marginTop: "8px" }}>
+                  {validationIssues.length ? `${validationIssues.length}개` : "없음"}
+                </strong>
+                <p className="muted" style={{ marginTop: "8px", fontSize: "0.9rem" }}>
+                  {validationIssues.length
+                    ? validationIssues.slice(0, 3).join(" ")
+                    : "브라우저 저장과 Supabase 저장을 진행할 수 있습니다."}
+                </p>
+              </div>
+            </div>
+            <div className="chip-row" style={{ marginTop: "var(--space-5)" }}>
+              <span className="chip">기준 r{baseRevision}</span>
+              <span className="chip">초안 r{draft.revision ?? 1}</span>
+              <span className={hasLocalOverride ? "chip chip--accent" : "chip"}>
+                로컬 편집본 {hasLocalOverride ? "있음" : "없음"}
+              </span>
+              {remotePersistenceEnabled ? (
+                <span className="chip chip--accent">Supabase 저장 가능</span>
+              ) : (
+                <span className="chip">Supabase 저장 비활성</span>
+              )}
+            </div>
+          </section>
+
           <div className="hero-actions" style={{ justifyContent: "flex-end" }}>
             <button type="button" className="btn btn-secondary" onClick={handleReset}>
               로컬 편집본 초기화
             </button>
-            <button type="button" className="btn btn-primary" onClick={handleSave}>
+            <button type="button" className="btn btn-primary" onClick={handleSave} disabled={!canSaveDraft}>
               브라우저에 저장
             </button>
             <button
               type="button"
               className="btn btn-secondary"
               onClick={handleRemoteSave}
-              disabled={!remotePersistenceEnabled || isRemoteSaving}
+              disabled={!remotePersistenceEnabled || isRemoteSaving || !canSaveDraft}
             >
               {isRemoteSaving ? "Supabase 저장 중..." : "Supabase에 저장"}
             </button>

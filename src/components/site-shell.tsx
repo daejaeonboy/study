@@ -50,6 +50,16 @@ const sections: Array<{ test: (pathname: string) => boolean; meta: SectionMeta }
     },
   },
   {
+    test: (pathname) => pathname.startsWith("/practice"),
+    meta: {
+      title: "연습지",
+      hint: "읽은 내용을 문제로 풀고, 답변이 들어간 학습지를 인쇄합니다.",
+      fileName: "practice-sheet.md",
+      outline: ["학습지 정보", "Light 문제", "Core 문제", "Deep 문제", "종합 문제"],
+      links: ["Topic으로 돌아가기", "답변 인쇄하기", "서고에 보관"],
+    },
+  },
+  {
     test: (pathname) => pathname.startsWith("/path"),
     meta: {
       title: "여정",

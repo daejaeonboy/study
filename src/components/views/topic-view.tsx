@@ -22,6 +22,8 @@ export function TopicView({
     savedSlugs,
     notes,
     layerProgress,
+    syncStatus,
+    syncMessage,
     toggleSave,
     setNote,
     markRecent,
@@ -92,6 +94,9 @@ export function TopicView({
           </button>
           <Link href={`/path/${resolvedTopic.slug}`} className="btn btn-secondary">
             학습 여정 추적
+          </Link>
+          <Link href={`/practice/${resolvedTopic.slug}`} className="btn btn-secondary">
+            문제 풀기
           </Link>
         </div>
       </header>
@@ -174,6 +179,17 @@ export function TopicView({
 
           <section className="surface sidebar-card">
             <span className="caption sidebar-card__title">기록</span>
+            {syncMessage ? (
+              <p
+                className="muted"
+                style={{
+                  marginBottom: "var(--space-3)",
+                  color: syncStatus === "error" ? "var(--danger)" : "var(--text-muted)",
+                }}
+              >
+                {syncMessage}
+              </p>
+            ) : null}
             <textarea
               className="plain-input note-area"
               value={notes[resolvedTopic.slug] ?? ""}

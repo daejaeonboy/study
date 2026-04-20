@@ -31,6 +31,8 @@ type LibraryContextValue = {
   recentSlugs: string[];
   notes: Record<string, string>;
   layerProgress: Record<string, LayerDepth>;
+  syncStatus: "idle" | "syncing" | "saved" | "error";
+  syncMessage: string | null;
   toggleSave: (topicSlug: string) => void;
   markRecent: (topicSlug: string) => void;
   setNote: (topicSlug: string, value: string, depth?: LayerDepth) => void;
@@ -244,6 +246,13 @@ export function LibraryProvider({
     getGuestServerSnapshot,
   );
   const [remoteSnapshot, setRemoteSnapshot] = useState(initialSnapshot);
+  const [syncState, setSyncState] = useState<{
+    status: LibraryContextValue["syncStatus"];
+    message: string | null;
+  }>({
+    status: "idle",
+    message: null,
+  });
   const latestSyncIdRef = useRef(0);
   const dirtyNoteSlugsRef = useRef(new Set<string>());
   const noteSyncTimersRef = useRef(new Map<string, number>());
@@ -268,6 +277,10 @@ export function LibraryProvider({
     }
 
     const syncId = ++latestSyncIdRef.current;
+    setSyncState({
+      status: "syncing",
+      message: "서고 변경 사항을 Supabase에 저장하는 중입니다.",
+    });
 
     void postLibraryMutation(mutation)
       .then((nextSnapshot) => {
@@ -278,9 +291,17 @@ export function LibraryProvider({
         setRemoteSnapshot((current) =>
           mergeServerSnapshot(current, nextSnapshot, dirtyNoteSlugsRef.current),
         );
+        setSyncState({
+          status: "saved",
+          message: "서고 변경 사항을 Supabase에 저장했습니다.",
+        });
       })
       .catch((error) => {
         console.error(error);
+        setSyncState({
+          status: "error",
+          message: "서고 변경 사항을 Supabase에 저장하지 못했습니다. 화면의 변경은 유지됩니다.",
+        });
       });
   }
 
@@ -290,6 +311,10 @@ export function LibraryProvider({
     }
 
     dirtyNoteSlugsRef.current.add(mutation.topicSlug);
+    setSyncState({
+      status: "syncing",
+      message: "노트 변경 사항을 잠시 후 저장합니다.",
+    });
 
     const existingTimer = noteSyncTimersRef.current.get(mutation.topicSlug);
 
@@ -301,6 +326,10 @@ export function LibraryProvider({
       noteSyncTimersRef.current.delete(mutation.topicSlug);
 
       const syncId = ++latestSyncIdRef.current;
+      setSyncState({
+        status: "syncing",
+        message: "노트 변경 사항을 Supabase에 저장하는 중입니다.",
+      });
 
       void postLibraryMutation(mutation)
         .then((nextSnapshot) => {
@@ -313,9 +342,17 @@ export function LibraryProvider({
           setRemoteSnapshot((current) =>
             mergeServerSnapshot(current, nextSnapshot, dirtyNoteSlugsRef.current),
           );
+          setSyncState({
+            status: "saved",
+            message: "노트 변경 사항을 Supabase에 저장했습니다.",
+          });
         })
         .catch((error) => {
           console.error(error);
+          setSyncState({
+            status: "error",
+            message: "노트 변경 사항을 Supabase에 저장하지 못했습니다. 화면의 변경은 유지됩니다.",
+          });
         });
     }, 450);
 
@@ -350,6 +387,8 @@ export function LibraryProvider({
     recentSlugs: snapshot.recentSlugs,
     notes: snapshot.notes,
     layerProgress: snapshot.layerProgress,
+    syncStatus: appUser ? syncState.status : "idle",
+    syncMessage: appUser ? syncState.message : null,
     toggleSave(topicSlug) {
       commitMutation({
         type: "toggle-save",

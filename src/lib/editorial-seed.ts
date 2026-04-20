@@ -2,9 +2,9 @@ import type { EditorialUser, TopicAssignment, TopicReviewTask } from "@/lib/doma
 
 export const editorialUsers: EditorialUser[] = [
   {
-    id: "ops-admin",
-    displayName: "한지민",
-    email: "admin@ikl.local",
+    id: "bootstrap-admin",
+    displayName: "cryingonion77",
+    email: "cryingonion77@gmail.com",
     role: "admin",
   },
   {
@@ -21,27 +21,27 @@ export const editorialUsers: EditorialUser[] = [
   },
 ];
 
-export const currentEditorialUserId = "ops-admin";
+export const currentEditorialUserId = "bootstrap-admin";
 
 export const topicAssignments: TopicAssignment[] = [
   {
     topicSlug: "black-hole",
     assigneeId: "ops-editor",
-    assignedById: "ops-admin",
+    assignedById: "bootstrap-admin",
     assignedAt: "2026-03-28T10:00:00+09:00",
     note: "입문/심화 연결 문장 보강 필요",
   },
   {
     topicSlug: "philosophy-of-science",
     assigneeId: "ops-reviewer",
-    assignedById: "ops-admin",
+    assignedById: "bootstrap-admin",
     assignedAt: "2026-03-28T14:30:00+09:00",
     note: "검수 우선순위 상위",
   },
   {
     topicSlug: "french-revolution",
     assigneeId: "ops-editor",
-    assignedById: "ops-admin",
+    assignedById: "bootstrap-admin",
     assignedAt: "2026-03-27T16:00:00+09:00",
     note: "민주주의 브리지 개념 정리",
   },
@@ -71,7 +71,7 @@ export const topicReviewTasks: TopicReviewTask[] = [
     topicSlug: "french-revolution",
     status: "changes_requested",
     requesterId: "ops-editor",
-    reviewerId: "ops-admin",
+    reviewerId: "bootstrap-admin",
     requestedAt: "2026-03-27T19:00:00+09:00",
     reviewedAt: "2026-03-28T09:10:00+09:00",
     comment: "사건 설명은 충분하지만 민주주의와의 연결 논리 보강 필요",
@@ -81,7 +81,7 @@ export const topicReviewTasks: TopicReviewTask[] = [
     topicSlug: "democracy",
     status: "approved",
     requesterId: "ops-editor",
-    reviewerId: "ops-admin",
+    reviewerId: "bootstrap-admin",
     requestedAt: "2026-03-26T11:00:00+09:00",
     reviewedAt: "2026-03-26T18:40:00+09:00",
     comment: "게시 가능",

@@ -94,8 +94,6 @@ type AssistantMessage = {
   tone?: "default" | "pending" | "error";
 };
 
-type SidebarPanel = "browse" | "settings";
-
 type AiIntegrationSettings = {
   enabled: boolean;
   provider: "openai" | "gemini" | "grok" | "custom";
@@ -165,10 +163,6 @@ const DEFAULT_AI_SETTINGS: AiIntegrationSettings = {
   systemPrompt:
     "당신은 친절한 학술 학습 도우미입니다. 한국어로 명확하고 직접적인 답변을 제공하세요.",
 };
-
-function isDocumentTab(tab: WorkspaceTab): tab is Extract<WorkspaceTab, { kind: "document" }> {
-  return tab.kind === "document";
-}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -766,17 +760,19 @@ export function HomeView() {
       const next = { ...current, [key]: value };
 
       if (key === "provider") {
-        if (value === "openai") {
+        const provider = value as AiIntegrationSettings["provider"];
+
+        if (provider === "openai") {
           next.apiUrl = "https://api.openai.com/v1/chat/completions";
-        } else if (value === "gemini") {
+        } else if (provider === "gemini") {
           next.apiUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-        } else if (value === "grok") {
+        } else if (provider === "grok") {
           next.apiUrl = "https://api.x.ai/v1/chat/completions";
         }
 
-        next.model = isSupportedAiModel(value, current.model)
+        next.model = isSupportedAiModel(provider, current.model)
           ? current.model
-          : getDefaultModelForProvider(value);
+          : getDefaultModelForProvider(provider);
       }
 
       return next;

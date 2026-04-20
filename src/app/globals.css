@@ -17,6 +17,15 @@
   --accent-strong: #2563eb;
   --secondary: #64748b;
   --secondary-soft: rgba(100, 116, 139, 0.08);
+  --success: #15803d;
+  --success-soft: rgba(21, 128, 61, 0.1);
+  --success-border: rgba(21, 128, 61, 0.18);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.1);
+  --warning-border: rgba(180, 83, 9, 0.18);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.08);
+  --danger-border: rgba(220, 38, 38, 0.16);
 
   --line: #f3f4f6;
   --line-strong: #e5e7eb;
@@ -911,6 +920,128 @@ textarea {
   border-style: dashed;
 }
 
+.practice-view {
+  max-width: 1040px;
+}
+
+.printable-sheet {
+  display: grid;
+  gap: var(--space-8);
+  margin-top: var(--space-10);
+}
+
+.practice-sheet-cover,
+.practice-section {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.practice-sheet-cover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--space-8);
+  padding: var(--space-8);
+}
+
+.practice-sheet-cover h2,
+.practice-section h3 {
+  color: var(--text-strong);
+  line-height: 1.25;
+}
+
+.practice-sheet-cover h2 {
+  margin-top: var(--space-3);
+  font-size: 2rem;
+}
+
+.practice-sheet-cover p,
+.practice-section__head p {
+  margin-top: var(--space-3);
+  color: var(--text-muted);
+  line-height: 1.75;
+}
+
+.practice-sheet-meta {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.practice-sheet-meta span {
+  display: block;
+  min-height: 42px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.practice-section {
+  padding: var(--space-8);
+  break-inside: avoid;
+}
+
+.practice-section__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  margin-bottom: var(--space-6);
+}
+
+.practice-question-list {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.practice-question {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  break-inside: avoid;
+}
+
+.practice-question__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.practice-answer {
+  min-height: 132px;
+  line-height: 1.65;
+}
+
+.practice-reference {
+  padding: var(--space-3);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+
+.practice-reference summary {
+  cursor: pointer;
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.practice-reference p {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.practice-section--synthesis {
+  border-color: var(--accent-border);
+}
+
 .note-page {
   gap: var(--space-10);
 }
@@ -1215,6 +1346,124 @@ textarea {
   .reading-footer__actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .practice-sheet-cover {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-section,
+  .practice-sheet-cover {
+    padding: var(--space-5);
+  }
+
+  .practice-section__head {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    overflow: visible;
+    background: #ffffff;
+    color: #111827;
+  }
+
+  .vault-sidebar,
+  .context-sidebar,
+  .canvas-header,
+  .practice-screen-only {
+    display: none;
+  }
+
+  .page-shell,
+  .main-canvas,
+  .canvas-content,
+  .view {
+    display: block;
+    width: auto;
+    min-height: 0;
+    height: auto;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .printable-sheet {
+    display: block;
+    margin: 0;
+  }
+
+  .practice-sheet-cover,
+  .practice-section,
+  .practice-question {
+    box-shadow: none;
+    background: #ffffff;
+    border-color: #d1d5db;
+  }
+
+  .practice-sheet-cover,
+  .practice-section {
+    margin-bottom: 10mm;
+    page-break-inside: avoid;
+  }
+
+  .practice-sheet-cover {
+    grid-template-columns: 1fr 62mm;
+    padding: 0 0 8mm;
+    border: 0;
+    border-bottom: 2px solid #111827;
+  }
+
+  .practice-sheet-cover h2 {
+    font-size: 22pt;
+  }
+
+  .practice-sheet-cover p,
+  .practice-section__head p,
+  .practice-reference p {
+    color: #374151;
+  }
+
+  .practice-section {
+    padding: 7mm;
+    border-radius: 0;
+  }
+
+  .practice-section__head {
+    margin-bottom: 6mm;
+  }
+
+  .practice-question {
+    padding: 5mm;
+    border-radius: 0;
+    margin-bottom: 5mm;
+  }
+
+  .practice-answer {
+    border-color: #9ca3af;
+    background: #ffffff;
+    min-height: 34mm;
+    resize: none;
+  }
+
+  .practice-reference {
+    border-color: #d1d5db;
+    background: #f9fafb;
+  }
+
+  .practice-reference:not([open]) summary::after {
+    content: " - 필요하면 화면에서 펼친 뒤 인쇄";
+    color: #6b7280;
+    font-weight: 400;
+  }
+
+  .btn {
+    display: none;
   }
 }
 

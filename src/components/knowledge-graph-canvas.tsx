@@ -377,16 +377,20 @@ export function KnowledgeGraphCanvas(props: KnowledgeGraphCanvasProps) {
   });
 
   useEffect(() => {
-    setViewport((current) =>
-      current.selection === selectionKey && current.x === 0 && current.y === 0
-        ? current
-        : {
-            ...current,
-            selection: selectionKey,
-            x: 0,
-            y: 0,
-          },
-    );
+    const frameId = window.requestAnimationFrame(() => {
+      setViewport((current) =>
+        current.selection === selectionKey && current.x === 0 && current.y === 0
+          ? current
+          : {
+              ...current,
+              selection: selectionKey,
+              x: 0,
+              y: 0,
+            },
+      );
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
   }, [selectionKey]);
 
   const activePanOffset =

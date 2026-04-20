@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useDeferredValue, useMemo, useState } from "react";
 
 import { useLibrary } from "@/components/providers/library-provider";
 import type { AppUser, Topic } from "@/lib/domain";
@@ -13,7 +14,19 @@ export function LibraryView({
   topics: Topic[];
   user: AppUser;
 }) {
-  const { savedSlugs, recentSlugs, notes, layerProgress, toggleSave } = useLibrary();
+  const {
+    savedSlugs,
+    recentSlugs,
+    notes,
+    layerProgress,
+    syncStatus,
+    syncMessage,
+    toggleSave,
+  } = useLibrary();
+  const [archiveQuery, setArchiveQuery] = useState("");
+  const [archiveScope, setArchiveScope] = useState<"all" | "saved" | "recent" | "notes">("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const deferredArchiveQuery = useDeferredValue(archiveQuery.trim().toLowerCase());
   const bySlug = new Map(topics.map((topic) => [topic.slug, topic]));
   const savedTopics = savedSlugs.map((slug) => bySlug.get(slug)).filter(Boolean) as Topic[];
   const recentTopics = recentSlugs.map((slug) => bySlug.get(slug)).filter(Boolean) as Topic[];
@@ -27,6 +40,44 @@ export function LibraryView({
   );
 
   const resumeTopic = recentTopics[0] ?? savedTopics[0] ?? topics[0];
+  const categories = useMemo(
+    () => [...new Set(topics.map((topic) => topic.category))].sort((left, right) => left.localeCompare(right)),
+    [topics],
+  );
+  const filteredArchiveTopics = topics.filter((topic) => {
+    if (categoryFilter !== "all" && topic.category !== categoryFilter) {
+      return false;
+    }
+
+    if (archiveScope === "saved" && !savedSlugs.includes(topic.slug)) {
+      return false;
+    }
+
+    if (archiveScope === "recent" && !recentSlugs.includes(topic.slug)) {
+      return false;
+    }
+
+    if (archiveScope === "notes" && !notes[topic.slug]) {
+      return false;
+    }
+
+    if (!deferredArchiveQuery) {
+      return true;
+    }
+
+    return [
+      topic.title,
+      topic.slug,
+      topic.category,
+      topic.summary,
+      topic.importance,
+      notes[topic.slug] ?? "",
+      ...topic.tags,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(deferredArchiveQuery);
+  });
 
   const reviewDeck = [
     {
@@ -82,6 +133,23 @@ export function LibraryView({
             <span>기록된 통찰</span>
           </div>
         </div>
+        {syncMessage ? (
+          <div
+            className="surface"
+            style={{
+              padding: "var(--space-4)",
+              border:
+                syncStatus === "error"
+                  ? "1px solid var(--danger-border)"
+                  : "1px solid var(--accent-border)",
+            }}
+          >
+            <span className="caption">{syncStatus.toUpperCase()}</span>
+            <p className="muted" style={{ marginTop: "4px" }}>
+              {syncMessage}
+            </p>
+          </div>
+        ) : null}
       </header>
 
       <section className="stack" style={{ gap: 'var(--space-6)' }}>
@@ -178,8 +246,51 @@ export function LibraryView({
         <div className="section-head" style={{ borderBottom: '1px solid var(--line)', paddingBottom: 'var(--space-4)' }}>
           <h2 className="section-title">마스터 아카이브</h2>
         </div>
+        <div
+          className="surface-elevated"
+          style={{
+            padding: "var(--space-5)",
+            display: "grid",
+            gridTemplateColumns: "2fr 1fr 1fr",
+            gap: "var(--space-3)",
+          }}
+        >
+          <input
+            className="plain-input"
+            value={archiveQuery}
+            onChange={(event) => setArchiveQuery(event.target.value)}
+            placeholder="제목, 태그, 노트, 요약 검색"
+          />
+          <select
+            className="plain-input"
+            value={archiveScope}
+            onChange={(event) =>
+              setArchiveScope(event.target.value as "all" | "saved" | "recent" | "notes")
+            }
+          >
+            <option value="all">전체 주제</option>
+            <option value="saved">보관한 주제</option>
+            <option value="recent">최근 탐구</option>
+            <option value="notes">노트 있음</option>
+          </select>
+          <select
+            className="plain-input"
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+          >
+            <option value="all">전체 분야</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="caption">
+          {filteredArchiveTopics.length}개 주제 표시
+        </span>
         <div className="stack" style={{ gap: '0' }}>
-          {(journeyTopics.length ? journeyTopics : topics.slice(0, 10)).map((topic) => {
+          {filteredArchiveTopics.map((topic) => {
             const nextTopic = bySlug.get(topic.related[0] ?? "");
             const noteCount = noteEntries.filter((entry) => entry.topic.slug === topic.slug).length;
 
@@ -218,6 +329,11 @@ export function LibraryView({
               </div>
             );
           })}
+          {!filteredArchiveTopics.length ? (
+            <div className="surface" style={{ padding: "var(--space-10)", textAlign: "center" }}>
+              <p className="muted">검색 조건에 맞는 주제가 없습니다.</p>
+            </div>
+          ) : null}
         </div>
       </section>
     </section>

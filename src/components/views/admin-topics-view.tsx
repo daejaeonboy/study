@@ -60,6 +60,17 @@ export function AdminTopicsView({
       .toLowerCase()
       .includes(deferredQuery);
   });
+  const assignedCount = records.filter((record) => record.assignee).length;
+  const unassignedCount = records.length - assignedCount;
+  const changeRequestedCount = records.filter(
+    (record) => record.latestReviewTask?.status === "changes_requested",
+  ).length;
+  const activeReviewCount = records.filter((record) =>
+    ["pending", "in_review", "changes_requested"].includes(record.latestReviewTask?.status ?? ""),
+  ).length;
+  const readyCount = records.filter((record) =>
+    ["verified", "published"].includes(record.topic.verificationStatus ?? "generated"),
+  ).length;
 
   return (
     <section className="view">
@@ -75,12 +86,35 @@ export function AdminTopicsView({
           </p>
         </div>
 
+        <div className="metrics">
+          <div className="metric">
+            <strong>{records.length}</strong>
+            <span>전체 Topic</span>
+          </div>
+          <div className="metric">
+            <strong>{unassignedCount}</strong>
+            <span>미할당</span>
+          </div>
+          <div className="metric">
+            <strong>{activeReviewCount}</strong>
+            <span>진행 중 검수</span>
+          </div>
+          <div className="metric">
+            <strong>{changeRequestedCount}</strong>
+            <span>수정 요청</span>
+          </div>
+          <div className="metric">
+            <strong>{readyCount}</strong>
+            <span>게시 후보</span>
+          </div>
+        </div>
+
         <div
           className="surface-elevated"
           style={{
             padding: "var(--space-6)",
             display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: "var(--space-4)",
           }}
         >
@@ -116,6 +150,13 @@ export function AdminTopicsView({
               </option>
             ))}
           </select>
+
+          <div className="surface" style={{ padding: "12px 14px", background: "var(--bg-subtle)" }}>
+            <span className="caption">현재 표시</span>
+            <strong style={{ display: "block", marginTop: "4px" }}>
+              {filteredRecords.length}개
+            </strong>
+          </div>
         </div>
       </header>
 

@@ -177,6 +177,36 @@ create table if not exists user_notes (
     updated_at timestamptz not null default now()
 );
 
+create table if not exists practice_question_templates (
+    id uuid primary key default gen_random_uuid(),
+    topic_slug text not null,
+    depth text not null default 'light' check (depth in ('light', 'core', 'deep')),
+    kind text not null default 'application' check (kind in ('short_answer', 'concept_recall', 'application', 'bridge')),
+    prompt text not null,
+    guide text,
+    answer_lines integer not null default 4 check (answer_lines between 2 and 10),
+    model_answer text,
+    rubric text,
+    is_active boolean not null default true,
+    created_by_id text references editorial_users(id) on delete set null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create table if not exists practice_attempts (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references users(id) on delete cascade,
+    topic_id uuid not null references topics(id) on delete cascade,
+    topic_slug text not null,
+    attempt_seed text not null,
+    mode text not null default 'light' check (mode in ('light')),
+    question_count integer not null default 0,
+    generated_payload jsonb not null,
+    answers_payload jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    submitted_at timestamptz not null default now()
+);
+
 create table if not exists learning_paths (
     id uuid primary key default gen_random_uuid(),
     user_id uuid not null references users(id) on delete cascade,
@@ -233,3 +263,6 @@ create index if not exists idx_topic_relations_from on topic_relations(from_topi
 create index if not exists idx_topic_sources_topic on topic_sources(topic_id);
 create index if not exists idx_user_progress_user on user_progress(user_id, last_viewed_at desc);
 create index if not exists idx_user_bookmarks_user on user_bookmarks(user_id, created_at desc);
+create index if not exists idx_practice_templates_topic on practice_question_templates(topic_slug, depth, is_active);
+create index if not exists idx_practice_attempts_user on practice_attempts(user_id, submitted_at desc);
+create index if not exists idx_practice_attempts_topic on practice_attempts(topic_slug, submitted_at desc);

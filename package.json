@@ -2,6 +2,7 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "node ./scripts/run-dev.mjs",
     "dev:raw": "next dev",
@@ -9,6 +10,13 @@
     "start": "next start",
     "preview": "npm run build && next start -p 3001",
     "lint": "eslint",
+    "admin:bootstrap": "node ./scripts/bootstrap-supabase-admin.mjs",
+    "db:check": "node ./scripts/check-supabase.mjs",
+    "seed:supabase": "node ./scripts/import-seed-to-supabase.mjs",
+    "test:editorial-bootstrap": "node --test ./scripts/editorial-bootstrap.test.mjs",
+    "test:db-check": "node --test ./scripts/supabase-db-check-data.test.mjs",
+    "test:practice-sheet": "node --test ./scripts/practice-sheet.test.mjs",
+    "test:seed-import": "node --test ./scripts/supabase-seed-data.test.mjs",
     "gemini:ui": "powershell -ExecutionPolicy Bypass -File ./scripts/run-gemini-ui.ps1"
   },
   "dependencies": {
